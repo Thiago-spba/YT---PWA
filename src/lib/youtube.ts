@@ -58,6 +58,38 @@ export async function searchVideos(query: string): Promise<Video[]> {
   }))
 }
 
+export interface SearchPage {
+  videos: Video[]
+  nextPageToken?: string
+}
+
+export async function searchVideosPage(query: string, pageToken?: string): Promise<SearchPage> {
+  const key = assertKey()
+  const params = new URLSearchParams({
+    key,
+    q: query,
+    part: 'snippet',
+    type: 'video',
+    maxResults: '12',
+    safeSearch: 'strict',
+  })
+  if (pageToken) params.set('pageToken', pageToken)
+  const res = await fetch(`${BASE_URL}/search?${params}`)
+  if (!res.ok) {
+    throw new YoutubeApiError(`Busca falhou (${res.status})`)
+  }
+  const data = await res.json()
+  return {
+    videos: data.items.map((item: any) => ({
+      id: item.id.videoId,
+      title: item.snippet.title,
+      channelTitle: item.snippet.channelTitle,
+      thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+    })),
+    nextPageToken: data.nextPageToken,
+  }
+}
+
 export async function getVideoById(id: string): Promise<Video | null> {
   const key = assertKey()
   const params = new URLSearchParams({ key, id, part: 'snippet' })

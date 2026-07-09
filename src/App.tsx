@@ -10,9 +10,10 @@ import Onboarding from './components/Onboarding'
 import TopBar from './components/TopBar'
 import Catalog from './components/Catalog'
 import Favorites from './components/Favorites'
-import Player from './components/Player'
+import Watch from './components/Watch'
 import Footer from './components/Footer'
 import AccountPanel from './components/AccountPanel'
+import ThemeToggle from './components/ThemeToggle'
 
 type View = 'catalog' | 'favorites'
 
@@ -45,22 +46,36 @@ function App() {
     setTimeUp(true)
   }
 
+  function handleChangeView(next: View) {
+    setPlaying(null)
+    setView(next)
+  }
+
   return (
     <div className="min-h-svh bg-neutral-50 dark:bg-neutral-950">
-      <TopBar view={view} onChange={setView} />
+      <TopBar view={view} onChange={handleChangeView} />
       {timeUp && (
         <div className="mx-4 mt-4 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200">
           Tempo de uso de hoje esgotado. Volte amanhã ou peça para o
           responsável ajustar o limite nas configurações.
         </div>
       )}
-      {view === 'catalog' && <Catalog onSelect={handleSelect} />}
-      {view === 'favorites' && <Favorites onSelect={handleSelect} />}
-      {playing && (
-        <Player video={playing} onClose={() => setPlaying(null)} onTimeUp={handleTimeUp} />
+      {playing ? (
+        <Watch
+          video={playing}
+          onClose={() => setPlaying(null)}
+          onSelect={handleSelect}
+          onTimeUp={handleTimeUp}
+        />
+      ) : (
+        <>
+          {view === 'catalog' && <Catalog onSelect={handleSelect} />}
+          {view === 'favorites' && <Favorites onSelect={handleSelect} />}
+        </>
       )}
       <Footer />
       <AccountPanel />
+      <ThemeToggle />
     </div>
   )
 }

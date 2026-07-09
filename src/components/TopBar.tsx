@@ -1,5 +1,3 @@
-import ThemeToggle from './ThemeToggle'
-
 type View = 'catalog' | 'favorites'
 
 interface Props {
@@ -34,7 +32,6 @@ export default function TopBar({ view, onChange }: Props) {
           </button>
         ))}
       </nav>
-      <ThemeToggle />
     </header>
   )
 }
