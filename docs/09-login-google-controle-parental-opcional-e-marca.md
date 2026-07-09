@@ -90,14 +90,34 @@ resto restrito:
   Google)
 - `frame-src`: `+ https://accounts.google.com`
 
-## Pendências para o login Google funcionar de verdade
+## Configuração do OAuth — concluída
 
-1. Criar um **ID de cliente OAuth 2.0** (tipo "Aplicativo da Web") no
-   mesmo projeto do Google Cloud, com origem JavaScript autorizada
-   `https://yt-pwa-nine.vercel.app`.
-2. Adicionar `VITE_GOOGLE_CLIENT_ID` no `.env` local e como variável de
-   ambiente de produção no Vercel, depois publicar de novo.
+1. ID de cliente OAuth 2.0 criado no Google Auth Platform (mesmo projeto
+   `YT - PWA`), tipo "Aplicativo da Web", origem JavaScript autorizada
+   `https://yt-pwa-nine.vercel.app`. Publicação em modo "Testando", com
+   o e-mail do responsável cadastrado como usuário de teste (limite de
+   100 usuários nesse modo, mais que suficiente para uso pessoal/familiar
+   — evita o processo de verificação do Google, que só é exigido para
+   apps públicos).
+2. `VITE_GOOGLE_CLIENT_ID` adicionado ao `.env` local e como variável de
+   ambiente de produção no Vercel.
+3. Confirmado por inspeção do bundle publicado que o ID do cliente está
+   corretamente embutido no JS de produção.
 
-Sem isso, o botão "Conectar com Google" mostra um aviso claro
-("VITE_GOOGLE_CLIENT_ID não configurado...") em vez de falhar
-silenciosamente — comportamento testado e confirmado no preview.
+Nota de segurança: a tela de criação também gera uma "chave secreta do
+cliente" (client secret) — **não foi usada em nenhum lugar do código**,
+porque o fluxo é 100% client-side (Google Identity Services, token
+client). Client secret é para clientes confidenciais/com backend; expô-la
+no navegador seria um erro. Só o ID do cliente (público por natureza,
+como qualquer botão "Entrar com o Google") foi usado.
+
+## Pendente
+
+- Testar o fluxo de login completo num dispositivo real (a extensão do
+  Chrome usada para automação não estava disponível durante o
+  desenvolvimento, então o clique real no popup de consentimento do
+  Google não foi exercitado por mim — só a lógica de erro/estado foi
+  testada). Ao logar pela primeira vez, é esperado que o Google mostre um
+  aviso de "app não verificado" (normal para apps em modo de teste) —
+  clique em "Continuar"/"Avançado" para prosseguir, já que você mesmo é o
+  usuário de teste cadastrado.
