@@ -36,6 +36,16 @@ Fora do escopo por enquanto (avaliar depois, se necessário):
 - Filtros de conteúdo automatizados além do `safeSearch=strict` da API do
   YouTube — a curadoria fica a cargo do responsável.
 
+Descartado (não é só "fora do escopo", é inviável neste projeto):
+- **Download de vídeo para assistir offline.** Os Termos de Serviço do
+  YouTube só permitem download pelo app oficial deles, com YouTube
+  Premium — fazer isso por fora viola o ToS. Também não é tecnicamente
+  possível num PWA sem backend: o navegador não tem permissão de CORS
+  para baixar o stream de vídeo bruto do YouTube, e as URLs de stream são
+  assinadas/temporárias por design, para impedir esse tipo de extração.
+  Uma versão anterior deste documento tratava isso como "planejado para o
+  futuro" — foi corrigido para não criar expectativa falsa.
+
 ## Por que não existe "integração" real com o Brave
 
 Uma PWA não tem API para controlar configurações do navegador. O que

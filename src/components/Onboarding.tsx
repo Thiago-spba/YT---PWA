@@ -36,8 +36,8 @@ export default function Onboarding({ onDone }: Props) {
       </ol>
       <p className="rounded-lg bg-neutral-100 p-3 text-sm text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
         Os vídeos só podem ser assistidos com internet — não é possível
-        baixá-los para ver offline no momento. Essa opção está planejada
-        para uma versão futura.
+        baixá-los para ver offline. Isso segue os Termos de Uso do YouTube,
+        que só permitem download pelo app oficial deles com YouTube Premium.
       </p>
       <button
         type="button"
