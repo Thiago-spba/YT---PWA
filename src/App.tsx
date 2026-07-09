@@ -10,12 +10,13 @@ import Onboarding from './components/Onboarding'
 import TopBar from './components/TopBar'
 import Catalog from './components/Catalog'
 import Favorites from './components/Favorites'
+import History from './components/History'
 import Watch from './components/Watch'
 import Footer from './components/Footer'
 import AccountPanel from './components/AccountPanel'
 import ThemeToggle from './components/ThemeToggle'
 
-type View = 'catalog' | 'favorites'
+type View = 'catalog' | 'favorites' | 'history'
 
 function limitReachedNow(): boolean {
   if (!isParentalControlEnabled()) return false
@@ -71,6 +72,7 @@ function App() {
         <>
           {view === 'catalog' && <Catalog onSelect={handleSelect} />}
           {view === 'favorites' && <Favorites onSelect={handleSelect} />}
+          {view === 'history' && <History onSelect={handleSelect} />}
         </>
       )}
       <Footer />

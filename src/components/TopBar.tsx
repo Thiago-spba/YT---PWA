@@ -1,4 +1,4 @@
-type View = 'catalog' | 'favorites'
+type View = 'catalog' | 'favorites' | 'history'
 
 interface Props {
   view: View
@@ -8,6 +8,7 @@ interface Props {
 const items: { key: View; label: string }[] = [
   { key: 'catalog', label: 'Catálogo' },
   { key: 'favorites', label: 'Favoritos' },
+  { key: 'history', label: 'Histórico' },
 ]
 
 export default function TopBar({ view, onChange }: Props) {

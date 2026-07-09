@@ -70,3 +70,13 @@ export async function listHistory(): Promise<HistoryEntry[]> {
   const all = await db.getAll('history')
   return all.sort((a, b) => b.watchedAt - a.watchedAt)
 }
+
+export async function removeHistoryEntry(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('history', id)
+}
+
+export async function clearHistory(): Promise<void> {
+  const db = await getDB()
+  await db.clear('history')
+}

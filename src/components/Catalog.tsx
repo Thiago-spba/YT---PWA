@@ -8,11 +8,19 @@ interface Props {
   onSelect: (video: Video) => void
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <circle cx="11" cy="11" r="7" />
+      <path strokeLinecap="round" d="M21 21l-4.3-4.3" />
+    </svg>
+  )
+}
+
 export default function Catalog({ onSelect }: Props) {
   const [catalog, setCatalog] = useState<Video[]>([])
-  const [query, setQuery] = useState('')
+  const [input, setInput] = useState('')
   const [results, setResults] = useState<Video[]>([])
-  const [addInput, setAddInput] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -20,42 +28,38 @@ export default function Catalog({ onSelect }: Props) {
     listCatalog().then(setCatalog)
   }, [])
 
-  async function handleSearch(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!query.trim()) return
-    setLoading(true)
-    setStatus(null)
-    try {
-      setResults(await searchVideos(query))
-    } catch (err) {
-      setStatus(err instanceof YoutubeApiError ? err.message : 'Erro ao buscar vídeos.')
-    } finally {
-      setLoading(false)
-    }
-  }
+    const value = input.trim()
+    if (!value) return
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
-    const id = extractVideoId(addInput)
-    if (!id) {
-      setStatus('Cole um link ou ID de vídeo válido do YouTube.')
-      return
-    }
+    const id = extractVideoId(value)
     setLoading(true)
     setStatus(null)
+    setResults([])
+
     try {
-      const video = hasApiKey()
-        ? await getVideoById(id)
-        : { id, title: id, channelTitle: '', thumbnailUrl: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }
-      if (!video) {
-        setStatus('Vídeo não encontrado.')
-        return
+      if (id) {
+        const video = hasApiKey()
+          ? await getVideoById(id)
+          : { id, title: id, channelTitle: '', thumbnailUrl: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }
+        if (!video) {
+          setStatus('Vídeo não encontrado.')
+          return
+        }
+        await addToCatalog(video)
+        setCatalog(await listCatalog())
+        setStatus('Vídeo adicionado ao catálogo.')
+        setInput('')
+      } else if (hasApiKey()) {
+        setResults(await searchVideos(value))
+      } else {
+        setStatus(
+          'Isso não parece um link do YouTube. Para buscar por texto, a busca precisa estar configurada.',
+        )
       }
-      await addToCatalog(video)
-      setCatalog(await listCatalog())
-      setAddInput('')
     } catch (err) {
-      setStatus(err instanceof YoutubeApiError ? err.message : 'Erro ao adicionar vídeo.')
+      setStatus(err instanceof YoutubeApiError ? err.message : 'Algo deu errado.')
     } finally {
       setLoading(false)
     }
@@ -68,41 +72,31 @@ export default function Catalog({ onSelect }: Props) {
 
   return (
     <div className="mx-auto max-w-[1800px] p-4">
-      <form onSubmit={handleAdd} className="mb-6 flex flex-col gap-2 sm:flex-row">
+      <form onSubmit={handleSubmit} className="mx-auto mb-6 flex max-w-2xl gap-2">
         <input
-          value={addInput}
-          onChange={(e) => setAddInput(e.target.value)}
-          placeholder="Colar link do vídeo do YouTube para adicionar ao catálogo"
-          className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={
+            hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
+          }
+          className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800"
         />
         <button
           type="submit"
           disabled={loading}
-          className="shrink-0 rounded bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+          aria-label="Buscar ou adicionar"
+          title="Buscar ou adicionar"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
         >
-          Adicionar
+          <SearchIcon />
         </button>
       </form>
 
-      {hasApiKey() && (
-        <form onSubmit={handleSearch} className="mb-6 flex flex-col gap-2 sm:flex-row">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar vídeos no YouTube"
-            className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="shrink-0 rounded bg-neutral-700 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-          >
-            Buscar
-          </button>
-        </form>
+      {status && (
+        <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-600 dark:text-neutral-300">
+          {status}
+        </p>
       )}
-
-      {status && <p className="mb-4 text-sm text-red-600 dark:text-red-400">{status}</p>}
 
       {results.length > 0 && (
         <section className="mb-8">
