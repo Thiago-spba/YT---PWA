@@ -16,6 +16,7 @@ import {
   type UserPlaylist,
 } from '../lib/googleYoutube'
 import { addToCatalog } from '../lib/db'
+import { getShortFlags, hasApiKey } from '../lib/youtube'
 import type { Video } from '../types'
 import {
   getDailyLimitMinutes,
@@ -27,7 +28,11 @@ import {
   verifyPin,
 } from '../lib/storage'
 
-export default function AccountPanel() {
+interface Props {
+  onCatalogChanged: () => void
+}
+
+export default function AccountPanel({ onCatalogChanged }: Props) {
   const [open, setOpen] = useState(false)
   const [pinExists, setPinExists] = useState(false)
   const [parentalEnabled, setParentalEnabled] = useState(isParentalControlEnabled())
@@ -169,13 +174,24 @@ export default function AccountPanel() {
     })
   }
 
+  async function enrichWithShortFlags(videos: Video[]): Promise<Video[]> {
+    if (!hasApiKey() || videos.length === 0) return videos
+    try {
+      const flags = await getShortFlags(videos.map((v) => v.id))
+      return videos.map((v) => ({ ...v, isShort: flags[v.id] }))
+    } catch {
+      return videos
+    }
+  }
+
   async function handleImport() {
-    const toImport = playlistVideos.filter((v) => selected.has(v.id))
+    const toImport = await enrichWithShortFlags(playlistVideos.filter((v) => selected.has(v.id)))
     for (const video of toImport) {
       await addToCatalog(video)
     }
     setImportStatus(`${toImport.length} vídeo(s) adicionados ao catálogo.`)
     setSelected(new Set())
+    if (toImport.length > 0) onCatalogChanged()
   }
 
   async function handleImportEntirePlaylist(playlistId: string) {
@@ -187,11 +203,12 @@ export default function AccountPanel() {
     setGoogleLoading(true)
     setGoogleError(null)
     try {
-      const videos = await listPlaylistVideos(playlistId)
+      const videos = await enrichWithShortFlags(await listPlaylistVideos(playlistId))
       for (const video of videos) {
         await addToCatalog(video)
       }
       setImportStatus(`${videos.length} vídeo(s) importados dessa playlist.`)
+      if (videos.length > 0) onCatalogChanged()
     } catch (err) {
       setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar playlist.')
     } finally {
@@ -210,13 +227,14 @@ export default function AccountPanel() {
     let total = 0
     try {
       for (const p of playlists) {
-        const videos = await listPlaylistVideos(p.id)
+        const videos = await enrichWithShortFlags(await listPlaylistVideos(p.id))
         for (const video of videos) {
           await addToCatalog(video)
         }
         total += videos.length
       }
       setImportStatus(`${total} vídeo(s) importados de todas as playlists.`)
+      if (total > 0) onCatalogChanged()
     } catch (err) {
       setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar tudo.')
     } finally {

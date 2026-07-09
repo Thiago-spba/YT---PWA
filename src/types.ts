@@ -3,6 +3,7 @@ export interface Video {
   title: string
   channelTitle: string
   thumbnailUrl: string
+  isShort?: boolean
 }
 
 export interface HistoryEntry extends Video {

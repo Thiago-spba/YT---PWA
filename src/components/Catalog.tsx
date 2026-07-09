@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
 import VideoCard from './VideoCard'
 import { addToCatalog, listCatalog, removeFromCatalog } from '../lib/db'
@@ -23,9 +23,41 @@ export default function Catalog({ onSelect }: Props) {
   const [results, setResults] = useState<Video[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [suggestions, setSuggestions] = useState<Video[]>([])
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const boxRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     listCatalog().then(setCatalog)
+  }, [])
+
+  // Sugestões enquanto digita (debounce) — só quando parece texto de
+  // busca, não quando já é um link/ID reconhecível.
+  useEffect(() => {
+    const value = input.trim()
+    if (!hasApiKey() || value.length < 3 || extractVideoId(value)) {
+      setSuggestions([])
+      return
+    }
+    setSuggestLoading(true)
+    const timer = setTimeout(() => {
+      searchVideos(value)
+        .then((videos) => setSuggestions(videos.slice(0, 6)))
+        .catch(() => setSuggestions([]))
+        .finally(() => setSuggestLoading(false))
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [input])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -37,6 +69,7 @@ export default function Catalog({ onSelect }: Props) {
     setLoading(true)
     setStatus(null)
     setResults([])
+    setShowSuggestions(false)
 
     try {
       if (id) {
@@ -65,6 +98,15 @@ export default function Catalog({ onSelect }: Props) {
     }
   }
 
+  async function handleAddSuggestion(video: Video) {
+    setShowSuggestions(false)
+    setInput('')
+    const full = hasApiKey() ? await getVideoById(video.id).catch(() => null) : null
+    await addToCatalog(full ?? video)
+    setCatalog(await listCatalog())
+    setStatus(`"${video.title}" adicionado ao catálogo.`)
+  }
+
   async function handleRemove(id: string) {
     await removeFromCatalog(id)
     setCatalog(await listCatalog())
@@ -72,25 +114,55 @@ export default function Catalog({ onSelect }: Props) {
 
   return (
     <div className="mx-auto max-w-[1800px] p-4">
-      <form onSubmit={handleSubmit} className="mx-auto mb-6 flex max-w-2xl gap-2">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={
-            hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
-          }
-          className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          aria-label="Buscar ou adicionar"
-          title="Buscar ou adicionar"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
-        >
-          <SearchIcon />
-        </button>
-      </form>
+      <div ref={boxRef} className="relative mx-auto mb-6 max-w-2xl">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onFocus={() => setShowSuggestions(true)}
+            placeholder={
+              hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
+            }
+            autoComplete="off"
+            className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            aria-label="Buscar ou adicionar"
+            title="Buscar ou adicionar"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            <SearchIcon />
+          </button>
+        </form>
+
+        {showSuggestions && (suggestLoading || suggestions.length > 0) && (
+          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
+            {suggestLoading && suggestions.length === 0 && (
+              <p className="p-3 text-sm text-neutral-500 dark:text-neutral-400">Buscando…</p>
+            )}
+            {suggestions.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => handleAddSuggestion(v)}
+                className="flex w-full items-center gap-2 p-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700"
+              >
+                <img src={v.thumbnailUrl} alt="" className="h-10 w-16 shrink-0 rounded object-cover" />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-neutral-800 dark:text-neutral-100">
+                    {v.title}
+                  </span>
+                  <span className="block truncate text-xs text-neutral-500 dark:text-neutral-400">
+                    {v.channelTitle}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {status && (
         <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-600 dark:text-neutral-300">

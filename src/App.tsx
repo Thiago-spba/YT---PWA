@@ -11,12 +11,13 @@ import TopBar from './components/TopBar'
 import Catalog from './components/Catalog'
 import Favorites from './components/Favorites'
 import History from './components/History'
+import Shorts from './components/Shorts'
 import Watch from './components/Watch'
 import Footer from './components/Footer'
 import AccountPanel from './components/AccountPanel'
 import ThemeToggle from './components/ThemeToggle'
 
-type View = 'catalog' | 'favorites' | 'history'
+type View = 'catalog' | 'favorites' | 'history' | 'shorts'
 
 function limitReachedNow(): boolean {
   if (!isParentalControlEnabled()) return false
@@ -29,6 +30,7 @@ function App() {
   const [view, setView] = useState<View>('catalog')
   const [playing, setPlaying] = useState<Video | null>(null)
   const [timeUp, setTimeUp] = useState(limitReachedNow())
+  const [catalogVersion, setCatalogVersion] = useState(0)
 
   if (!onboardingDone) {
     return <Onboarding onDone={() => setOnboardingDone(true)} />
@@ -70,13 +72,14 @@ function App() {
         />
       ) : (
         <>
-          {view === 'catalog' && <Catalog onSelect={handleSelect} />}
+          {view === 'catalog' && <Catalog key={catalogVersion} onSelect={handleSelect} />}
+          {view === 'shorts' && <Shorts key={catalogVersion} />}
           {view === 'favorites' && <Favorites onSelect={handleSelect} />}
           {view === 'history' && <History onSelect={handleSelect} />}
         </>
       )}
       <Footer />
-      <AccountPanel />
+      <AccountPanel onCatalogChanged={() => setCatalogVersion((v) => v + 1)} />
       <ThemeToggle />
     </div>
   )

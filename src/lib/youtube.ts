@@ -90,9 +90,19 @@ export async function searchVideosPage(query: string, pageToken?: string): Promi
   }
 }
 
+/** Converte duração ISO 8601 (ex: "PT1M5S") em segundos. */
+export function parseIsoDuration(iso: string): number {
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!match) return 0
+  const [, h, m, s] = match
+  return (Number(h) || 0) * 3600 + (Number(m) || 0) * 60 + (Number(s) || 0)
+}
+
+const SHORT_MAX_SECONDS = 60
+
 export async function getVideoById(id: string): Promise<Video | null> {
   const key = assertKey()
-  const params = new URLSearchParams({ key, id, part: 'snippet' })
+  const params = new URLSearchParams({ key, id, part: 'snippet,contentDetails' })
   const res = await fetch(`${BASE_URL}/videos?${params}`)
   if (!res.ok) {
     throw new YoutubeApiError(`Consulta falhou (${res.status})`)
@@ -100,12 +110,33 @@ export async function getVideoById(id: string): Promise<Video | null> {
   const data = await res.json()
   const item = data.items?.[0]
   if (!item) return null
+  const seconds = item.contentDetails?.duration ? parseIsoDuration(item.contentDetails.duration) : null
   return {
     id: item.id,
     title: item.snippet.title,
     channelTitle: item.snippet.channelTitle,
     thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+    isShort: seconds !== null ? seconds > 0 && seconds <= SHORT_MAX_SECONDS : undefined,
   }
+}
+
+/** Busca duração de até 50 vídeos de uma vez e devolve um mapa id -> isShort. */
+export async function getShortFlags(ids: string[]): Promise<Record<string, boolean>> {
+  if (ids.length === 0) return {}
+  const key = assertKey()
+  const flags: Record<string, boolean> = {}
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50)
+    const params = new URLSearchParams({ key, id: batch.join(','), part: 'contentDetails' })
+    const res = await fetch(`${BASE_URL}/videos?${params}`)
+    if (!res.ok) continue
+    const data = await res.json()
+    for (const item of data.items ?? []) {
+      const seconds = parseIsoDuration(item.contentDetails.duration)
+      flags[item.id] = seconds > 0 && seconds <= SHORT_MAX_SECONDS
+    }
+  }
+  return flags
 }
 
 export function hasApiKey(): boolean {

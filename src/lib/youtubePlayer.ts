@@ -1,6 +1,11 @@
 export interface YTPlayer {
   loadVideoById: (videoId: string) => void
   destroy: () => void
+  mute: () => void
+  unMute: () => void
+  isMuted: () => boolean
+  playVideo: () => void
+  pauseVideo: () => void
 }
 
 export const YT_PLAYER_STATE_ENDED = 0
