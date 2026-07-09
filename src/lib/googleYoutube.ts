@@ -1,4 +1,5 @@
 import { getAccessToken, GoogleAuthError } from './googleAuth'
+import { resolveThumbnail } from './thumbnail'
 import type { Video } from '../types'
 
 const BASE_URL = 'https://www.googleapis.com/youtube/v3'
@@ -69,7 +70,6 @@ export async function listPlaylistVideos(playlistId: string): Promise<Video[]> {
       id: item.snippet.resourceId.videoId,
       title: item.snippet.title,
       channelTitle: item.snippet.videoOwnerChannelTitle ?? item.snippet.channelTitle ?? '',
-      thumbnailUrl:
-        item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
+      thumbnailUrl: resolveThumbnail(item.snippet.resourceId.videoId, item.snippet.thumbnails),
     }))
 }

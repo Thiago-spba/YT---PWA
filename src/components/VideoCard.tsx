@@ -1,4 +1,5 @@
 import type { Video } from '../types'
+import { resolveThumbnail } from '../lib/thumbnail'
 
 interface Props {
   video: Video
@@ -13,7 +14,7 @@ export default function VideoCard({ video, onSelect }: Props) {
       className="flex flex-col overflow-hidden rounded-lg border border-neutral-200 text-left transition hover:shadow-md dark:border-neutral-700"
     >
       <img
-        src={video.thumbnailUrl}
+        src={video.thumbnailUrl || resolveThumbnail(video.id)}
         alt=""
         className="aspect-video w-full object-cover"
         loading="lazy"

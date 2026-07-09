@@ -16,7 +16,7 @@ import {
   type UserPlaylist,
 } from '../lib/googleYoutube'
 import { addToCatalog } from '../lib/db'
-import { getShortFlags, hasApiKey } from '../lib/youtube'
+import { getVideoFlags, hasApiKey } from '../lib/youtube'
 import type { Video } from '../types'
 import {
   getDailyLimitMinutes,
@@ -174,22 +174,32 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     })
   }
 
-  async function enrichWithShortFlags(videos: Video[]): Promise<Video[]> {
-    if (!hasApiKey() || videos.length === 0) return videos
+  /** Marca Shorts e remove vídeos que o dono bloqueou para incorporação. */
+  async function filterAndEnrich(videos: Video[]): Promise<{ videos: Video[]; skipped: number }> {
+    if (!hasApiKey() || videos.length === 0) return { videos, skipped: 0 }
     try {
-      const flags = await getShortFlags(videos.map((v) => v.id))
-      return videos.map((v) => ({ ...v, isShort: flags[v.id] }))
+      const flags = await getVideoFlags(videos.map((v) => v.id))
+      const kept = videos
+        .filter((v) => flags[v.id]?.embeddable !== false)
+        .map((v) => ({ ...v, isShort: flags[v.id]?.isShort }))
+      return { videos: kept, skipped: videos.length - kept.length }
     } catch {
-      return videos
+      return { videos, skipped: 0 }
     }
   }
 
+  function skippedSuffix(skipped: number): string {
+    return skipped > 0 ? ` (${skipped} pulado(s): o dono não permite reprodução fora do YouTube)` : ''
+  }
+
   async function handleImport() {
-    const toImport = await enrichWithShortFlags(playlistVideos.filter((v) => selected.has(v.id)))
+    const { videos: toImport, skipped } = await filterAndEnrich(
+      playlistVideos.filter((v) => selected.has(v.id)),
+    )
     for (const video of toImport) {
       await addToCatalog(video)
     }
-    setImportStatus(`${toImport.length} vídeo(s) adicionados ao catálogo.`)
+    setImportStatus(`${toImport.length} vídeo(s) adicionados ao catálogo.${skippedSuffix(skipped)}`)
     setSelected(new Set())
     if (toImport.length > 0) onCatalogChanged()
   }
@@ -203,11 +213,11 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     setGoogleLoading(true)
     setGoogleError(null)
     try {
-      const videos = await enrichWithShortFlags(await listPlaylistVideos(playlistId))
+      const { videos, skipped } = await filterAndEnrich(await listPlaylistVideos(playlistId))
       for (const video of videos) {
         await addToCatalog(video)
       }
-      setImportStatus(`${videos.length} vídeo(s) importados dessa playlist.`)
+      setImportStatus(`${videos.length} vídeo(s) importados dessa playlist.${skippedSuffix(skipped)}`)
       if (videos.length > 0) onCatalogChanged()
     } catch (err) {
       setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar playlist.')
@@ -225,15 +235,19 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     setGoogleLoading(true)
     setGoogleError(null)
     let total = 0
+    let totalSkipped = 0
     try {
       for (const p of playlists) {
-        const videos = await enrichWithShortFlags(await listPlaylistVideos(p.id))
+        const { videos, skipped } = await filterAndEnrich(await listPlaylistVideos(p.id))
         for (const video of videos) {
           await addToCatalog(video)
         }
         total += videos.length
+        totalSkipped += skipped
       }
-      setImportStatus(`${total} vídeo(s) importados de todas as playlists.`)
+      setImportStatus(
+        `${total} vídeo(s) importados de todas as playlists.${skippedSuffix(totalSkipped)}`,
+      )
       if (total > 0) onCatalogChanged()
     } catch (err) {
       setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar tudo.')

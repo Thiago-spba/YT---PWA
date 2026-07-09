@@ -101,10 +101,14 @@ export default function Catalog({ onSelect }: Props) {
   async function handleAddSuggestion(video: Video) {
     setShowSuggestions(false)
     setInput('')
-    const full = hasApiKey() ? await getVideoById(video.id).catch(() => null) : null
-    await addToCatalog(full ?? video)
-    setCatalog(await listCatalog())
-    setStatus(`"${video.title}" adicionado ao catálogo.`)
+    try {
+      const full = hasApiKey() ? await getVideoById(video.id) : video
+      await addToCatalog(full ?? video)
+      setCatalog(await listCatalog())
+      setStatus(`"${video.title}" adicionado ao catálogo.`)
+    } catch (err) {
+      setStatus(err instanceof YoutubeApiError ? err.message : 'Não foi possível adicionar esse vídeo.')
+    }
   }
 
   async function handleRemove(id: string) {

@@ -1,9 +1,11 @@
+import { resolveThumbnail } from './thumbnail'
 import type { Video } from '../types'
 
 const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined
 const BASE_URL = 'https://www.googleapis.com/youtube/v3'
 
 export class YoutubeApiError extends Error {}
+export class NotEmbeddableError extends YoutubeApiError {}
 
 function assertKey(): string {
   if (!API_KEY) {
@@ -54,7 +56,7 @@ export async function searchVideos(query: string): Promise<Video[]> {
     id: item.id.videoId,
     title: item.snippet.title,
     channelTitle: item.snippet.channelTitle,
-    thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+    thumbnailUrl: resolveThumbnail(item.id.videoId, item.snippet.thumbnails),
   }))
 }
 
@@ -84,7 +86,7 @@ export async function searchVideosPage(query: string, pageToken?: string): Promi
       id: item.id.videoId,
       title: item.snippet.title,
       channelTitle: item.snippet.channelTitle,
-      thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+      thumbnailUrl: resolveThumbnail(item.id.videoId, item.snippet.thumbnails),
     })),
     nextPageToken: data.nextPageToken,
   }
@@ -102,7 +104,7 @@ const SHORT_MAX_SECONDS = 60
 
 export async function getVideoById(id: string): Promise<Video | null> {
   const key = assertKey()
-  const params = new URLSearchParams({ key, id, part: 'snippet,contentDetails' })
+  const params = new URLSearchParams({ key, id, part: 'snippet,contentDetails,status' })
   const res = await fetch(`${BASE_URL}/videos?${params}`)
   if (!res.ok) {
     throw new YoutubeApiError(`Consulta falhou (${res.status})`)
@@ -110,30 +112,76 @@ export async function getVideoById(id: string): Promise<Video | null> {
   const data = await res.json()
   const item = data.items?.[0]
   if (!item) return null
+  if (item.status?.embeddable === false) {
+    throw new NotEmbeddableError(
+      'Este vídeo não pode ser adicionado: o dono desativou a reprodução fora do YouTube.',
+    )
+  }
   const seconds = item.contentDetails?.duration ? parseIsoDuration(item.contentDetails.duration) : null
   return {
     id: item.id,
     title: item.snippet.title,
     channelTitle: item.snippet.channelTitle,
-    thumbnailUrl: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url,
+    thumbnailUrl: resolveThumbnail(item.id, item.snippet.thumbnails),
     isShort: seconds !== null ? seconds > 0 && seconds <= SHORT_MAX_SECONDS : undefined,
   }
 }
 
-/** Busca duração de até 50 vídeos de uma vez e devolve um mapa id -> isShort. */
-export async function getShortFlags(ids: string[]): Promise<Record<string, boolean>> {
+/**
+ * Busca vídeos e devolve só os que são Shorts de verdade (≤60s) e
+ * incorporáveis. Usa `videoDuration=short` (filtro grosso da API, até
+ * 4 min) e depois confirma a duração exata via `getVideoFlags`.
+ */
+export async function searchShorts(query: string): Promise<Video[]> {
+  const key = assertKey()
+  const params = new URLSearchParams({
+    key,
+    q: query,
+    part: 'snippet',
+    type: 'video',
+    maxResults: '24',
+    safeSearch: 'strict',
+    videoDuration: 'short',
+  })
+  const res = await fetch(`${BASE_URL}/search?${params}`)
+  if (!res.ok) {
+    throw new YoutubeApiError(`Busca falhou (${res.status})`)
+  }
+  const data = await res.json()
+  const candidates: Video[] = data.items.map((item: any) => ({
+    id: item.id.videoId,
+    title: item.snippet.title,
+    channelTitle: item.snippet.channelTitle,
+    thumbnailUrl: resolveThumbnail(item.id.videoId, item.snippet.thumbnails),
+  }))
+  const flags = await getVideoFlags(candidates.map((v) => v.id))
+  return candidates
+    .filter((v) => flags[v.id]?.isShort && flags[v.id]?.embeddable)
+    .map((v) => ({ ...v, isShort: true }))
+}
+
+export interface VideoFlags {
+  isShort: boolean
+  embeddable: boolean
+}
+
+/** Busca duração e permissão de incorporação de até 50 vídeos de uma vez. */
+export async function getVideoFlags(ids: string[]): Promise<Record<string, VideoFlags>> {
   if (ids.length === 0) return {}
   const key = assertKey()
-  const flags: Record<string, boolean> = {}
+  const flags: Record<string, VideoFlags> = {}
   for (let i = 0; i < ids.length; i += 50) {
     const batch = ids.slice(i, i + 50)
-    const params = new URLSearchParams({ key, id: batch.join(','), part: 'contentDetails' })
+    const params = new URLSearchParams({ key, id: batch.join(','), part: 'contentDetails,status' })
     const res = await fetch(`${BASE_URL}/videos?${params}`)
     if (!res.ok) continue
     const data = await res.json()
     for (const item of data.items ?? []) {
       const seconds = parseIsoDuration(item.contentDetails.duration)
-      flags[item.id] = seconds > 0 && seconds <= SHORT_MAX_SECONDS
+      flags[item.id] = {
+        isShort: seconds > 0 && seconds <= SHORT_MAX_SECONDS,
+        embeddable: item.status?.embeddable !== false,
+      }
     }
   }
   return flags

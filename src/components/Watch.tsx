@@ -54,6 +54,22 @@ function CloseIcon() {
   )
 }
 
+function ChevronLeftIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-6 w-6">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" />
+    </svg>
+  )
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-6 w-6">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+    </svg>
+  )
+}
+
 const iconButtonClass =
   'flex h-9 w-9 items-center justify-center rounded-full bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600'
 const iconButtonClassDark =
@@ -75,6 +91,9 @@ export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
   const feedRef = useRef<Video[]>([])
   const autoplayRef = useRef(autoplay)
   const onSelectRef = useRef(onSelect)
+  const stackRef = useRef<Video[]>([video])
+  const indexRef = useRef(0)
+  const [, forceNavUpdate] = useState(0)
 
   useEffect(() => {
     autoplayRef.current = autoplay
@@ -116,6 +135,43 @@ export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Pilha de navegação (estilo histórico do navegador): permite "Anterior"
+  // voltar exatamente para onde você estava, e "Próximo" avançar de novo
+  // se você já tinha ido para a frente. Uma seleção nova (thumbnail,
+  // busca) descarta o que ficou pra frente e empilha o vídeo atual.
+  useEffect(() => {
+    const stack = stackRef.current
+    const idx = indexRef.current
+    if (stack[idx]?.id !== video.id) {
+      if (stack[idx + 1]?.id === video.id) {
+        indexRef.current = idx + 1
+      } else if (idx > 0 && stack[idx - 1]?.id === video.id) {
+        indexRef.current = idx - 1
+      } else {
+        stackRef.current = [...stack.slice(0, idx + 1), video]
+        indexRef.current = stackRef.current.length - 1
+      }
+    }
+    forceNavUpdate((n) => n + 1)
+  }, [video])
+
+  function handlePrev() {
+    if (indexRef.current > 0) onSelect(stackRef.current[indexRef.current - 1])
+  }
+
+  function handleNext() {
+    const stack = stackRef.current
+    const idx = indexRef.current
+    if (idx < stack.length - 1) {
+      onSelect(stack[idx + 1])
+    } else {
+      const next = feedRef.current[0]
+      if (next) onSelect(next)
+    }
+  }
+
+  const canGoPrev = indexRef.current > 0
 
   useEffect(() => {
     recordHistory(video)
@@ -277,6 +333,28 @@ export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
         }
       >
         <div ref={containerRef} className="h-full w-full" />
+
+        <button
+          type="button"
+          onClick={handlePrev}
+          disabled={!canGoPrev}
+          title="Vídeo anterior"
+          aria-label="Vídeo anterior"
+          className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-0"
+        >
+          <ChevronLeftIcon />
+        </button>
+        <button
+          type="button"
+          onClick={handleNext}
+          disabled={indexRef.current >= stackRef.current.length - 1 && feed.length === 0}
+          title="Próximo vídeo"
+          aria-label="Próximo vídeo"
+          className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-0"
+        >
+          <ChevronRightIcon />
+        </button>
+
         {videoError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/95 p-4 text-center text-white">
             <p className="text-sm">
