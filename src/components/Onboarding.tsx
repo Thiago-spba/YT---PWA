@@ -34,6 +34,11 @@ export default function Onboarding({ onDone }: Props) {
           precisar repetir esses passos.
         </li>
       </ol>
+      <p className="rounded-lg bg-neutral-100 p-3 text-sm text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+        Os vídeos só podem ser assistidos com internet — não é possível
+        baixá-los para ver offline no momento. Essa opção está planejada
+        para uma versão futura.
+      </p>
       <button
         type="button"
         onClick={() => {

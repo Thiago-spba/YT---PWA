@@ -7,6 +7,7 @@ import Catalog from './components/Catalog'
 import Favorites from './components/Favorites'
 import Settings from './components/Settings'
 import Player from './components/Player'
+import Footer from './components/Footer'
 
 type View = 'catalog' | 'favorites' | 'settings'
 
@@ -53,6 +54,7 @@ function App() {
       {playing && (
         <Player video={playing} onClose={() => setPlaying(null)} onTimeUp={handleTimeUp} />
       )}
+      <Footer />
     </div>
   )
 }
