@@ -68,7 +68,7 @@ export default function Catalog({ onSelect }: Props) {
 
   return (
     <div className="mx-auto max-w-5xl p-4">
-      <form onSubmit={handleAdd} className="mb-6 flex gap-2">
+      <form onSubmit={handleAdd} className="mb-6 flex flex-col gap-2 sm:flex-row">
         <input
           value={addInput}
           onChange={(e) => setAddInput(e.target.value)}
@@ -78,14 +78,14 @@ export default function Catalog({ onSelect }: Props) {
         <button
           type="submit"
           disabled={loading}
-          className="rounded bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+          className="shrink-0 rounded bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
         >
           Adicionar
         </button>
       </form>
 
       {hasApiKey() && (
-        <form onSubmit={handleSearch} className="mb-6 flex gap-2">
+        <form onSubmit={handleSearch} className="mb-6 flex flex-col gap-2 sm:flex-row">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -95,7 +95,7 @@ export default function Catalog({ onSelect }: Props) {
           <button
             type="submit"
             disabled={loading}
-            className="rounded bg-neutral-700 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
+            className="shrink-0 rounded bg-neutral-700 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
           >
             Buscar
           </button>
