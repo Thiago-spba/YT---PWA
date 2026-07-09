@@ -3,6 +3,7 @@ import type { Video } from '../types'
 import { isFavorite, listCatalog, recordHistory, toggleFavorite } from '../lib/db'
 import { addUsageMinutes, getDailyLimitMinutes, isParentalControlEnabled } from '../lib/storage'
 import { hasApiKey, searchVideosPage } from '../lib/youtube'
+import { loadYouTubeApi, type YTPlayer } from '../lib/youtubePlayer'
 import VideoCard from './VideoCard'
 
 interface Props {
@@ -12,18 +13,90 @@ interface Props {
   onTimeUp: () => void
 }
 
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path
+        strokeLinejoin="round"
+        d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5z"
+      />
+    </svg>
+  )
+}
+
+function ExpandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 3H4v4M16 3h4v4M8 21H4v-4M16 21h4v-4" />
+    </svg>
+  )
+}
+
+function CompressIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h4V4M20 8h-4V4M4 16h4v4M20 16h-4v4" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  )
+}
+
+const iconButtonClass =
+  'flex h-9 w-9 items-center justify-center rounded-full bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600'
+const iconButtonClassDark =
+  'flex h-9 w-9 items-center justify-center rounded-full bg-neutral-700 text-white hover:bg-neutral-600'
+
 export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
   const [fullscreen, setFullscreen] = useState(false)
   const [favorite, setFavorite] = useState(false)
+  const [videoError, setVideoError] = useState(false)
   const [catalogFeed, setCatalogFeed] = useState<Video[]>([])
   const [suggested, setSuggested] = useState<Video[]>([])
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined)
   const [loadingMore, setLoadingMore] = useState(false)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const playerRef = useRef<YTPlayer | null>(null)
+  const readyRef = useRef(false)
+
+  // Cria o player uma única vez; trocar de vídeo só chama loadVideoById,
+  // preservando a mesma instância entre o modo janela e tela cheia.
+  useEffect(() => {
+    let cancelled = false
+    loadYouTubeApi().then((YT) => {
+      if (cancelled || !containerRef.current) return
+      playerRef.current = new YT.Player(containerRef.current, {
+        videoId: video.id,
+        host: 'https://www.youtube-nocookie.com',
+        playerVars: { rel: 0, autoplay: 1, modestbranding: 1 },
+        events: {
+          onReady: () => {
+            readyRef.current = true
+          },
+          onError: () => setVideoError(true),
+        },
+      })
+    })
+    return () => {
+      cancelled = true
+      playerRef.current?.destroy()
+      playerRef.current = null
+      readyRef.current = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     recordHistory(video)
     isFavorite(video.id).then(setFavorite)
+    setVideoError(false)
 
     listCatalog().then((all) => setCatalogFeed(all.filter((v) => v.id !== video.id)))
 
@@ -39,6 +112,18 @@ export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
     }
 
     window.scrollTo({ top: 0 })
+
+    if (readyRef.current) {
+      playerRef.current?.loadVideoById(video.id)
+    } else {
+      const wait = setInterval(() => {
+        if (readyRef.current) {
+          playerRef.current?.loadVideoById(video.id)
+          clearInterval(wait)
+        }
+      }, 150)
+      return () => clearInterval(wait)
+    }
   }, [video])
 
   useEffect(() => {
@@ -83,6 +168,27 @@ export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
 
   const feed = [...catalogFeed, ...suggested]
 
+  const playerArea = (
+    <div className={fullscreen ? 'relative flex-1' : 'relative aspect-video w-full overflow-hidden rounded-lg bg-black'}>
+      <div ref={containerRef} className="h-full w-full" />
+      {videoError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/95 p-4 text-center text-white">
+          <p className="text-sm">
+            Este vídeo não está disponível (foi removido, ou o dono não permite assistir fora
+            do YouTube).
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded bg-violet-600 px-4 py-2 text-sm font-medium hover:bg-violet-700"
+          >
+            Voltar ao catálogo
+          </button>
+        </div>
+      )}
+    </div>
+  )
+
   if (fullscreen) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-black">
@@ -92,45 +198,31 @@ export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
             <button
               type="button"
               onClick={handleToggleFavorite}
-              className={`rounded px-3 py-1 text-sm ${
-                favorite ? 'bg-violet-600' : 'bg-neutral-700 hover:bg-neutral-600'
-              }`}
+              title={favorite ? 'Remover dos favoritos' : 'Favoritar'}
+              aria-label={favorite ? 'Remover dos favoritos' : 'Favoritar'}
+              className={favorite ? 'flex h-9 w-9 items-center justify-center rounded-full bg-violet-600' : iconButtonClassDark}
             >
-              {favorite ? '★ Favorito' : '☆ Favoritar'}
+              <StarIcon filled={favorite} />
             </button>
             <button
               type="button"
               onClick={() => setFullscreen(false)}
-              className="rounded bg-neutral-700 px-3 py-1 text-sm hover:bg-neutral-600"
+              title="Sair da tela cheia"
+              aria-label="Sair da tela cheia"
+              className={iconButtonClassDark}
             >
-              Sair da tela cheia
+              <CompressIcon />
             </button>
           </div>
         </div>
-        <div className="flex-1">
-          <iframe
-            className="h-full w-full"
-            src={`https://www.youtube-nocookie.com/embed/${video.id}?rel=0&autoplay=1`}
-            title={video.title}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-            allowFullScreen
-          />
-        </div>
+        {playerArea}
       </div>
     )
   }
 
   return (
     <div className="mx-auto max-w-5xl p-4">
-      <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
-        <iframe
-          className="h-full w-full"
-          src={`https://www.youtube-nocookie.com/embed/${video.id}?rel=0&autoplay=1`}
-          title={video.title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          allowFullScreen
-        />
-      </div>
+      {playerArea}
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
@@ -140,27 +232,29 @@ export default function Watch({ video, onClose, onSelect, onTimeUp }: Props) {
           <button
             type="button"
             onClick={handleToggleFavorite}
-            className={`rounded px-3 py-1.5 text-sm font-medium ${
-              favorite
-                ? 'bg-violet-600 text-white'
-                : 'bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600'
-            }`}
+            title={favorite ? 'Remover dos favoritos' : 'Favoritar'}
+            aria-label={favorite ? 'Remover dos favoritos' : 'Favoritar'}
+            className={favorite ? 'flex h-9 w-9 items-center justify-center rounded-full bg-violet-600 text-white' : iconButtonClass}
           >
-            {favorite ? '★ Favorito' : '☆ Favoritar'}
+            <StarIcon filled={favorite} />
           </button>
           <button
             type="button"
             onClick={() => setFullscreen(true)}
-            className="rounded bg-neutral-200 px-3 py-1.5 text-sm font-medium hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600"
+            title="Tela cheia"
+            aria-label="Tela cheia"
+            className={iconButtonClass}
           >
-            Tela cheia
+            <ExpandIcon />
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-neutral-200 px-3 py-1.5 text-sm font-medium hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600"
+            title="Fechar"
+            aria-label="Fechar"
+            className={iconButtonClass}
           >
-            Fechar
+            <CloseIcon />
           </button>
         </div>
       </div>
