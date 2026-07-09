@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Video } from '../types'
 import { isFavorite, recordHistory, toggleFavorite } from '../lib/db'
-import { addUsageMinutes, getDailyLimitMinutes } from '../lib/storage'
+import { addUsageMinutes, getDailyLimitMinutes, isParentalControlEnabled } from '../lib/storage'
 
 interface Props {
   video: Video
@@ -18,6 +18,7 @@ export default function Player({ video, onClose, onTimeUp }: Props) {
   }, [video])
 
   useEffect(() => {
+    if (!isParentalControlEnabled()) return
     const limit = getDailyLimitMinutes()
     if (!limit) return
     const interval = setInterval(() => {

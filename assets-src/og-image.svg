@@ -1,0 +1,13 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#16171d"/>
+  <rect x="420" y="149" width="360" height="204" rx="66" fill="url(#bg)"/>
+  <path d="M560 199 L560 303 L656 251 Z" fill="#ffffff"/>
+  <text x="600" y="470" font-family="system-ui, Segoe UI, Roboto, sans-serif" font-size="72" font-weight="700" fill="#ffffff" text-anchor="middle">YT</text>
+  <text x="600" y="520" font-family="system-ui, Segoe UI, Roboto, sans-serif" font-size="26" fill="#9ca3af" text-anchor="middle">Vídeos do YouTube sem propaganda</text>
+</svg>

@@ -4,7 +4,21 @@ const KEYS = {
   dailyLimitMinutes: 'yt-pwa:daily-limit-minutes',
   usageDate: 'yt-pwa:usage-date',
   usageMinutes: 'yt-pwa:usage-minutes',
+  parentalControlEnabled: 'yt-pwa:parental-control-enabled',
 } as const
+
+/** Controla se PIN + limite diário são exigidos. Desligado por padrão. */
+export function isParentalControlEnabled(): boolean {
+  return localStorage.getItem(KEYS.parentalControlEnabled) === '1'
+}
+
+export function setParentalControlEnabled(enabled: boolean): void {
+  if (enabled) {
+    localStorage.setItem(KEYS.parentalControlEnabled, '1')
+  } else {
+    localStorage.removeItem(KEYS.parentalControlEnabled)
+  }
+}
 
 export function isOnboardingDone(): boolean {
   return localStorage.getItem(KEYS.onboardingDone) === '1'

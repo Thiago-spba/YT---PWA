@@ -1,6 +1,6 @@
 import ThemeToggle from './ThemeToggle'
 
-type View = 'catalog' | 'favorites' | 'settings'
+type View = 'catalog' | 'favorites'
 
 interface Props {
   view: View
@@ -10,7 +10,6 @@ interface Props {
 const items: { key: View; label: string }[] = [
   { key: 'catalog', label: 'Catálogo' },
   { key: 'favorites', label: 'Favoritos' },
-  { key: 'settings', label: 'Configurações' },
 ]
 
 export default function TopBar({ view, onChange }: Props) {
