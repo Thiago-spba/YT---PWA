@@ -3,6 +3,8 @@ export interface YTPlayer {
   destroy: () => void
 }
 
+export const YT_PLAYER_STATE_ENDED = 0
+
 interface YTPlayerOptions {
   videoId: string
   host?: string
@@ -10,6 +12,7 @@ interface YTPlayerOptions {
   events?: {
     onReady?: () => void
     onError?: (event: { data: number }) => void
+    onStateChange?: (event: { data: number }) => void
   }
 }
 

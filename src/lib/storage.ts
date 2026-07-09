@@ -5,7 +5,17 @@ const KEYS = {
   usageDate: 'yt-pwa:usage-date',
   usageMinutes: 'yt-pwa:usage-minutes',
   parentalControlEnabled: 'yt-pwa:parental-control-enabled',
+  autoplayEnabled: 'yt-pwa:autoplay-enabled',
 } as const
+
+/** Toca o próximo vídeo da lista automaticamente ao terminar. Ligado por padrão. */
+export function isAutoplayEnabled(): boolean {
+  return localStorage.getItem(KEYS.autoplayEnabled) !== '0'
+}
+
+export function setAutoplayEnabled(enabled: boolean): void {
+  localStorage.setItem(KEYS.autoplayEnabled, enabled ? '1' : '0')
+}
 
 /** Controla se PIN + limite diário são exigidos. Desligado por padrão. */
 export function isParentalControlEnabled(): boolean {

@@ -67,7 +67,7 @@ export default function Catalog({ onSelect }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-5xl p-4">
+    <div className="mx-auto max-w-[1800px] p-4">
       <form onSubmit={handleAdd} className="mb-6 flex flex-col gap-2 sm:flex-row">
         <input
           value={addInput}
@@ -107,7 +107,7 @@ export default function Catalog({ onSelect }: Props) {
       {results.length > 0 && (
         <section className="mb-8">
           <h2 className="mb-2 text-lg font-semibold">Resultados da busca</h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {results.map((v) => (
               <VideoCard key={v.id} video={v} onSelect={onSelect} />
             ))}
@@ -122,7 +122,7 @@ export default function Catalog({ onSelect }: Props) {
             Nenhum vídeo no catálogo ainda. Cole um link acima para começar.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
             {catalog.map((v) => (
               <div key={v.id} className="relative">
                 <VideoCard video={v} onSelect={onSelect} />

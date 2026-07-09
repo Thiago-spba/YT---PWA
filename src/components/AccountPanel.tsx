@@ -178,6 +178,52 @@ export default function AccountPanel() {
     setSelected(new Set())
   }
 
+  async function handleImportEntirePlaylist(playlistId: string) {
+    if (!isTokenValid()) {
+      setGoogleError('Conexão com o Google expirou — toque em "Conectar com Google" para continuar.')
+      setGoogleConnected(false)
+      return
+    }
+    setGoogleLoading(true)
+    setGoogleError(null)
+    try {
+      const videos = await listPlaylistVideos(playlistId)
+      for (const video of videos) {
+        await addToCatalog(video)
+      }
+      setImportStatus(`${videos.length} vídeo(s) importados dessa playlist.`)
+    } catch (err) {
+      setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar playlist.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
+  async function handleImportAll() {
+    if (!isTokenValid()) {
+      setGoogleError('Conexão com o Google expirou — toque em "Conectar com Google" para continuar.')
+      setGoogleConnected(false)
+      return
+    }
+    setGoogleLoading(true)
+    setGoogleError(null)
+    let total = 0
+    try {
+      for (const p of playlists) {
+        const videos = await listPlaylistVideos(p.id)
+        for (const video of videos) {
+          await addToCatalog(video)
+        }
+        total += videos.length
+      }
+      setImportStatus(`${total} vídeo(s) importados de todas as playlists.`)
+    } catch (err) {
+      setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar tudo.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <>
       <button
@@ -297,23 +343,49 @@ export default function AccountPanel() {
                       </div>
 
                       <div>
-                        <h3 className="mb-1 text-xs font-semibold uppercase text-neutral-500">
-                          Playlists
-                        </h3>
-                        <div className="flex flex-wrap gap-1">
-                          {playlists.map((p) => (
+                        <div className="mb-1 flex items-center justify-between">
+                          <h3 className="text-xs font-semibold uppercase text-neutral-500">
+                            Playlists
+                          </h3>
+                          {playlists.length > 0 && (
                             <button
-                              key={p.id}
                               type="button"
-                              onClick={() => handleOpenPlaylist(p.id)}
-                              className={`rounded border px-2 py-1 text-xs ${
+                              onClick={handleImportAll}
+                              disabled={googleLoading}
+                              className="text-xs font-medium text-violet-600 underline hover:text-violet-700 disabled:opacity-50 dark:text-violet-400"
+                            >
+                              Importar tudo de uma vez
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          {playlists.map((p) => (
+                            <div
+                              key={p.id}
+                              className={`flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs ${
                                 activePlaylist === p.id
                                   ? 'border-violet-500 bg-violet-50 dark:bg-violet-950'
-                                  : 'border-neutral-300 hover:bg-neutral-100 dark:border-neutral-600 dark:hover:bg-neutral-800'
+                                  : 'border-neutral-300 dark:border-neutral-600'
                               }`}
                             >
-                              {p.title} ({p.itemCount})
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPlaylist(p.id)}
+                                disabled={googleLoading}
+                                className="flex-1 truncate text-left hover:underline"
+                              >
+                                {p.title} ({p.itemCount})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleImportEntirePlaylist(p.id)}
+                                disabled={googleLoading}
+                                title="Importar a playlist inteira de uma vez"
+                                className="shrink-0 rounded bg-neutral-200 px-1.5 py-0.5 text-[11px] font-medium hover:bg-neutral-300 disabled:opacity-50 dark:bg-neutral-700 dark:hover:bg-neutral-600"
+                              >
+                                importar tudo
+                              </button>
+                            </div>
                           ))}
                         </div>
                       </div>

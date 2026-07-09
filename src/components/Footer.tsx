@@ -12,10 +12,13 @@ export default function Footer() {
 
   return (
     <footer className="mt-8 border-t border-neutral-200 p-4 text-sm text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
-      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2">
+      <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-2">
         <span>
           <strong className="text-neutral-700 dark:text-neutral-200">YT</strong>{' '}
           — {year}
+        </span>
+        <span className="text-neutral-500 dark:text-neutral-400">
+          Thiago Fernando — Engenheiro da Computação e Desenvolvedor
         </span>
         <div className="flex gap-2">
           <button
@@ -36,7 +39,7 @@ export default function Footer() {
       </div>
 
       {open === 'privacy' && (
-        <div className="mx-auto mt-3 max-w-5xl space-y-2 rounded-lg bg-neutral-100 p-4 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+        <div className="mx-auto mt-3 max-w-[1800px] space-y-2 rounded-lg bg-neutral-100 p-4 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
           <h3 className="font-semibold text-neutral-800 dark:text-neutral-100">
             Privacidade
           </h3>
@@ -73,7 +76,7 @@ export default function Footer() {
       )}
 
       {open === 'terms' && (
-        <div className="mx-auto mt-3 max-w-5xl space-y-2 rounded-lg bg-neutral-100 p-4 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+        <div className="mx-auto mt-3 max-w-[1800px] space-y-2 rounded-lg bg-neutral-100 p-4 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
           <h3 className="font-semibold text-neutral-800 dark:text-neutral-100">
             Termos de uso
           </h3>

@@ -15,14 +15,14 @@ export default function Favorites({ onSelect }: Props) {
   }, [])
 
   return (
-    <div className="mx-auto max-w-5xl p-4">
+    <div className="mx-auto max-w-[1800px] p-4">
       <h1 className="mb-4 text-lg font-semibold">Favoritos</h1>
       {favorites.length === 0 ? (
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
           Nenhum favorito ainda.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {favorites.map((v) => (
             <VideoCard key={v.id} video={v} onSelect={onSelect} />
           ))}
