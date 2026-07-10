@@ -1,15 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
 import VideoCard from './VideoCard'
-import { hasApiKey, searchRecent, YoutubeApiError } from '../lib/youtube'
+import { listCatalog, removeFromCatalog } from '../lib/db'
+import { extractVideoId, getVideoById, hasApiKey, searchVideos, searchVideosPage, YoutubeApiError } from '../lib/youtube'
+import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
 interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
 }
 
-// As consultas usadas para popular o feed ficam só aqui internamente —
-// a tela não identifica nem separa por estilo, é um feed único.
-const QUERIES = ['música evangélica', 'música adventista hinos', 'música católica']
+// Cache curto em memória: sem isso, cada vez que o usuário voltava
+// para "Início" — a aba padrão — o app disparava buscas novas, mesmo
+// trocando de aba e voltando em segundos. Isso esgotava o limite de
+// requisições da API rápido, causando erro 403/429 em outras telas
+// (como Shorts) depois de pouco uso. 5 minutos segura esse limite sem
+// deixar o feed velho — a ordem também muda a cada visita, e dá pra
+// forçar vídeos novos na hora com o botão "Atualizar".
+let cachedVideos: Video[] | null = null
+let cachedAt = 0
+const CACHE_TTL_MS = 5 * 60 * 1000
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items]
@@ -20,61 +29,434 @@ function shuffle<T>(items: T[]): T[] {
   return copy
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <circle cx="11" cy="11" r="7" />
+      <path strokeLinecap="round" d="M21 21l-4.3-4.3" />
+    </svg>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M20 11A8 8 0 1 0 18.5 15.5M20 5v6h-6" />
+    </svg>
+  )
+}
+
 export default function Home({ onSelect }: Props) {
-  const [videos, setVideos] = useState<Video[]>([])
+  // Catálogo salvo (local, sem custo de cota) e vídeos da API ficam em
+  // estados separados — assim dá pra saber quais cartões têm lixeira
+  // (só os salvos) e "Atualizar" não perde o que já carregou.
+  const [catalogVideos, setCatalogVideos] = useState<Video[]>([])
+  const [apiVideos, setApiVideos] = useState<Video[]>([])
+  const [order, setOrder] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Rolagem infinita do feed geral: gira entre as 3 consultas fixas,
+  // guardando o nextPageToken de cada uma — nunca fica sem vídeo novo
+  // enquanto pelo menos uma consulta ainda tiver páginas.
+  const seenIdsRef = useRef(new Set<string>())
+  const pageTokensRef = useRef<Record<string, string | undefined>>({})
+  const exhaustedRef = useRef(new Set<string>())
+  const queryTurnRef = useRef(0)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  // Busca inteligente (autocomplete + resultados) — antes ficava presa
+  // dentro de "Meus Canais"; agora mora na Home, a tela principal.
+  const [input, setInput] = useState('')
+  const [suggestions, setSuggestions] = useState<Video[]>([])
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [searchQuery, setSearchQuery] = useState<string | null>(null)
+  const [searchResults, setSearchResults] = useState<Video[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchLoadingMore, setSearchLoadingMore] = useState(false)
+  const [searchStatus, setSearchStatus] = useState<string | null>(null)
+  const searchTokenRef = useRef<string | undefined>(undefined)
+  const searchSeenRef = useRef(new Set<string>())
+  const searchSentinelRef = useRef<HTMLDivElement | null>(null)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+
   useEffect(() => {
-    if (!hasApiKey()) {
+    // O catálogo salvo é local e sempre disponível — mostra na hora,
+    // garantindo que a Home nunca fique vazia, mesmo se a busca da API
+    // falhar (limite de requisições, sem internet etc).
+    listCatalog().then((videos) => {
+      setCatalogVideos(videos)
+      videos.forEach((v) => seenIdsRef.current.add(v.id))
       setLoading(false)
+    })
+
+    if (!hasApiKey()) return
+
+    if (cachedVideos && Date.now() - cachedAt < CACHE_TTL_MS) {
+      setApiVideos(cachedVideos)
+      cachedVideos.forEach((v) => seenIdsRef.current.add(v.id))
       return
     }
-    Promise.all(QUERIES.map((q) => searchRecent(q, 12).catch(() => [])))
-      .then((results) => {
-        const seen = new Set<string>()
-        const merged = results.flat().filter((v) => {
-          if (seen.has(v.id)) return false
-          seen.add(v.id)
-          return true
-        })
-        setVideos(shuffle(merged))
-      })
-      .catch((err) => {
-        setError(err instanceof YoutubeApiError ? err.message : 'Erro ao carregar vídeos.')
-      })
-      .finally(() => setLoading(false))
+
+    fetchInitial().then((videos) => {
+      if (videos) setApiVideos(videos)
+    })
   }, [])
 
-  if (!hasApiKey()) {
-    return (
-      <div className="mx-auto max-w-md p-8 text-center text-sm text-neutral-500 dark:text-neutral-400">
-        A página Início busca vídeos recentes automaticamente, mas isso depende da busca
-        estar configurada (chave da YouTube Data API). Enquanto isso, use a aba "Meus
-        Canais" para adicionar vídeos por link.
-      </div>
-    )
+  // Embaralha de novo toda vez que a lista de vídeos disponíveis muda
+  // — assim a ordem exibida muda a cada visita, mesmo quando o
+  // conteúdo em si ainda é o mesmo por causa do cache curto.
+  useEffect(() => {
+    setOrder((current) => {
+      const all = [...catalogVideos, ...apiVideos]
+      const known = new Set(current)
+      const fresh = all.filter((v) => !known.has(v.id)).map((v) => v.id)
+      return [...current, ...shuffle(fresh)]
+    })
+  }, [catalogVideos, apiVideos])
+
+  // Só a primeira consulta ao carregar — buscar as 3 de uma vez é
+  // muita requisição junta, exatamente o tipo de rajada que derruba a
+  // API com erro 429. As outras 2 entram aos poucos, conforme rola
+  // (loadMore) ou quando a pessoa toca "Atualizar" de novo.
+  async function fetchInitial(): Promise<Video[] | null> {
+    try {
+      const q = QUERIES[0]
+      const page = await searchVideosPage(q, undefined, 'date')
+      pageTokensRef.current[q] = page.nextPageToken
+      page.videos.forEach((v) => seenIdsRef.current.add(v.id))
+      cachedVideos = page.videos
+      cachedAt = Date.now()
+      return page.videos
+    } catch (err) {
+      setError(err instanceof YoutubeApiError ? err.message : null)
+      return null
+    }
   }
+
+  // Busca a próxima página de uma das 3 consultas (revezando entre
+  // elas) quando o sentinel no fim do feed aparece na tela.
+  async function loadMore() {
+    if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= QUERIES.length) return
+    let query: string | undefined
+    for (let i = 0; i < QUERIES.length; i++) {
+      const candidate = QUERIES[queryTurnRef.current % QUERIES.length]
+      queryTurnRef.current += 1
+      if (!exhaustedRef.current.has(candidate)) {
+        query = candidate
+        break
+      }
+    }
+    if (!query) return
+
+    setLoadingMore(true)
+    try {
+      const token = pageTokensRef.current[query]
+      const page = await searchVideosPage(query, token, 'date')
+      pageTokensRef.current[query] = page.nextPageToken
+      if (!page.nextPageToken) exhaustedRef.current.add(query)
+      const fresh = page.videos.filter((v) => !seenIdsRef.current.has(v.id))
+      fresh.forEach((v) => seenIdsRef.current.add(v.id))
+      if (fresh.length > 0) setApiVideos((current) => [...current, ...fresh])
+    } catch {
+      exhaustedRef.current.add(query)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!hasApiKey()) return
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore()
+      },
+      { rootMargin: '600px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingMore])
+
+  // Botão "Atualizar": ignora o cache e busca vídeos novos na hora —
+  // dá controle pra pessoa decidir quando quer conteúdo fresco, sem o
+  // app ter que buscar isso sozinho toda vez (o que gastava requisições
+  // à toa e foi o que causou os erros de limite de busca antes).
+  async function handleRefresh() {
+    if (!hasApiKey() || refreshing) return
+    setRefreshing(true)
+    setError(null)
+    pageTokensRef.current = {}
+    exhaustedRef.current.clear()
+    queryTurnRef.current = 0
+    const videos = await fetchInitial()
+    if (videos) setApiVideos(videos)
+    setRefreshing(false)
+  }
+
+  async function handleDeleteFromCatalog(video: Video) {
+    await removeFromCatalog(video.id)
+    setCatalogVideos((current) => current.filter((v) => v.id !== video.id))
+  }
+
+  // Sugestões enquanto digita (debounce) — só quando parece texto de
+  // busca, não quando já é um link/ID reconhecível.
+  useEffect(() => {
+    const value = input.trim()
+    if (!hasApiKey() || value.length < 3 || extractVideoId(value)) {
+      setSuggestions([])
+      return
+    }
+    setSuggestLoading(true)
+    const timer = setTimeout(() => {
+      searchVideos(value)
+        .then((results) => setSuggestions(results.slice(0, 6)))
+        .catch(() => setSuggestions([]))
+        .finally(() => setSuggestLoading(false))
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [input])
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const value = input.trim()
+    if (!value) return
+
+    const id = extractVideoId(value)
+    setSearchLoading(true)
+    setSearchStatus(null)
+    setSearchResults(null)
+    setSearchQuery(null)
+    setShowSuggestions(false)
+
+    try {
+      if (id) {
+        const video = hasApiKey()
+          ? await getVideoById(id)
+          : { id, title: id, channelTitle: '', thumbnailUrl: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }
+        if (!video) {
+          setSearchStatus('Vídeo não encontrado.')
+          return
+        }
+        onSelect(video)
+        setInput('')
+      } else if (hasApiKey()) {
+        searchSeenRef.current = new Set()
+        const page = await searchVideosPage(value)
+        page.videos.forEach((v) => searchSeenRef.current.add(v.id))
+        searchTokenRef.current = page.nextPageToken
+        setSearchResults(page.videos)
+        setSearchQuery(value)
+      } else {
+        setSearchStatus(
+          'Isso não parece um link do YouTube. Para buscar por texto, a busca precisa estar configurada.',
+        )
+      }
+    } catch (err) {
+      setSearchStatus(err instanceof YoutubeApiError ? err.message : 'Algo deu errado.')
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
+  // Mais resultados da mesma busca — a busca também não fica "sem
+  // vídeo": continua paginando até a API não ter mais nada, e o feed
+  // geral (infinito) continua logo abaixo de qualquer forma.
+  async function loadMoreSearch() {
+    if (!searchQuery || !searchTokenRef.current || searchLoadingMore) return
+    setSearchLoadingMore(true)
+    try {
+      const page = await searchVideosPage(searchQuery, searchTokenRef.current)
+      searchTokenRef.current = page.nextPageToken
+      const fresh = page.videos.filter((v) => !searchSeenRef.current.has(v.id))
+      fresh.forEach((v) => searchSeenRef.current.add(v.id))
+      if (fresh.length > 0) setSearchResults((current) => [...(current ?? []), ...fresh])
+    } catch {
+      searchTokenRef.current = undefined
+    } finally {
+      setSearchLoadingMore(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!searchQuery) return
+    const el = searchSentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMoreSearch()
+      },
+      { rootMargin: '600px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, searchLoadingMore])
+
+  function handleSelectSuggestion(video: Video) {
+    setShowSuggestions(false)
+    setInput('')
+    onSelect(video)
+  }
+
+  function handleClearSearch() {
+    setSearchResults(null)
+    setSearchQuery(null)
+    setSearchStatus(null)
+    setInput('')
+  }
+
+  const catalogIds = new Set(catalogVideos.map((v) => v.id))
+  const byId = new Map([...catalogVideos, ...apiVideos].map((v) => [v.id, v]))
+  const videos = order.map((id) => byId.get(id)!).filter(Boolean)
 
   return (
     <div className="mx-auto max-w-[1800px] p-4">
-      {loading && <p className="text-sm text-neutral-500 dark:text-neutral-400">Carregando…</p>}
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {!loading && !error && videos.length === 0 && (
+      <div ref={boxRef} className="relative mx-auto mb-6 max-w-2xl">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onFocus={() => setShowSuggestions(true)}
+            placeholder={
+              hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
+            }
+            autoComplete="off"
+            className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800"
+          />
+          <button
+            type="submit"
+            disabled={searchLoading}
+            aria-label="Buscar ou assistir"
+            title="Buscar ou assistir"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+          >
+            <SearchIcon />
+          </button>
+        </form>
+
+        {showSuggestions && (suggestLoading || suggestions.length > 0) && (
+          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
+            {suggestLoading && suggestions.length === 0 && (
+              <p className="p-3 text-sm text-neutral-500 dark:text-neutral-400">Buscando…</p>
+            )}
+            {suggestions.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => handleSelectSuggestion(v)}
+                className="flex w-full items-center gap-2 p-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700"
+              >
+                <img src={v.thumbnailUrl} alt="" className="h-10 w-16 shrink-0 rounded object-cover" />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-neutral-800 dark:text-neutral-100">
+                    {v.title}
+                  </span>
+                  <span className="block truncate text-xs text-neutral-500 dark:text-neutral-400">
+                    {v.channelTitle}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {searchStatus && (
+        <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-600 dark:text-neutral-300">
+          {searchStatus}
+        </p>
+      )}
+
+      {searchResults && (
+        <section className="mb-8">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">Resultados da busca</h2>
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="text-sm text-violet-600 underline hover:text-violet-700 dark:text-violet-400"
+            >
+              Fechar busca
+            </button>
+          </div>
+          {searchResults.length === 0 ? (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Nenhum vídeo encontrado.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {searchResults.map((v) => (
+                  <VideoCard key={v.id} video={v} onSelect={onSelect} />
+                ))}
+              </div>
+              <div ref={searchSentinelRef} className="h-4" />
+              {searchLoadingMore && (
+                <p className="mt-2 text-center text-sm text-neutral-500 dark:text-neutral-400">
+                  Carregando mais resultados…
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold">{searchResults ? 'Mais vídeos' : 'Início'}</h2>
+        {hasApiKey() && (
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-full border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          >
+            <RefreshIcon />
+            {refreshing ? 'Atualizando…' : 'Atualizar'}
+          </button>
+        )}
+      </div>
+      {loading && videos.length === 0 && (
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">Carregando…</p>
+      )}
+      {error && videos.length === 0 && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {!loading && videos.length === 0 && (
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          Nenhum vídeo encontrado agora.
+          Nenhum vídeo por aqui ainda. Busque acima ou adicione vídeos em "Meus Canais" para começar.
         </p>
       )}
       {videos.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {videos.map((v) => (
-            <VideoCard
-              key={v.id}
-              video={v}
-              onSelect={(video) => onSelect(video, videos.filter((sv) => sv.id !== video.id))}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+            {videos.map((v) => (
+              <VideoCard
+                key={v.id}
+                video={v}
+                onSelect={(video) => onSelect(video, videos.filter((sv) => sv.id !== video.id))}
+                onDelete={catalogIds.has(v.id) ? handleDeleteFromCatalog : undefined}
+              />
+            ))}
+          </div>
+          <div ref={sentinelRef} className="h-4" />
+          {loadingMore && (
+            <p className="mt-2 text-center text-sm text-neutral-500 dark:text-neutral-400">
+              Carregando mais vídeos…
+            </p>
+          )}
+        </>
       )}
     </div>
   )

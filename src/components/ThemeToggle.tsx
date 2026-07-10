@@ -50,7 +50,7 @@ export default function ThemeToggle() {
       onClick={cycle}
       title={titles[theme]}
       aria-label={titles[theme]}
-      className="fixed right-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-neutral-600 shadow backdrop-blur hover:bg-white dark:bg-neutral-900/70 dark:text-neutral-300 dark:hover:bg-neutral-900"
+      className="fixed right-3 top-3 z-[60] flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-neutral-600 shadow backdrop-blur hover:bg-white dark:bg-neutral-900/70 dark:text-neutral-300 dark:hover:bg-neutral-900"
     >
       <Icon theme={theme} />
     </button>

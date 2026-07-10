@@ -1,8 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
-import { addToCatalog, isFavorite, listCatalog, recordHistory, toggleFavorite } from '../lib/db'
-import { hasApiKey, searchShorts, YoutubeApiError } from '../lib/youtube'
+import {
+  isFavorite,
+  listCatalog,
+  recordHistory,
+  removeFromCatalog,
+  toggleFavorite,
+  updateCatalogVideoFlags,
+} from '../lib/db'
+import { getVideoFlags, hasApiKey, searchShortsPage, YoutubeApiError } from '../lib/youtube'
 import { loadYouTubeApi, type YTPlayer } from '../lib/youtubePlayer'
+import { DISCOVERY_QUERIES } from '../lib/discoveryQueries'
+
+// Cache curto (mesma ideia da Início): sem isso, reabrir a aba Shorts
+// disparava buscas novas toda vez, gastando requisições à toa.
+let cachedDiscovery: Video[] | null = null
+let cachedAt = 0
+const CACHE_TTL_MS = 5 * 60 * 1000
 
 function SearchIcon() {
   return (
@@ -36,6 +50,14 @@ function StarIcon({ filled }: { filled: boolean }) {
         strokeLinejoin="round"
         d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5z"
       />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12" />
     </svg>
   )
 }
@@ -106,30 +128,182 @@ function ShortThumb({ video, isActive, registerRef, onVisible }: ThumbProps) {
   )
 }
 
+const checkedIdsThisSession = new Set<string>()
+
 export default function Shorts() {
-  const [shorts, setShorts] = useState<Video[]>([])
+  // Feed geral (catálogo + descoberta) e resultado de busca ficam
+  // separados — `shorts` (abaixo) é sempre "o que está sendo exibido
+  // agora", trocando sozinho entre os dois. Isso deixa a busca usar
+  // exatamente a mesma rolagem vertical com favoritar/mudo/lixeira do
+  // feed normal, em vez de uma grade à parte sem esses controles.
+  const [feedShorts, setFeedShorts] = useState<Video[]>([])
+  const [searchFeed, setSearchFeed] = useState<Video[] | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [muted, setMuted] = useState(true)
   const [favorite, setFavorite] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<Video[] | null>(null)
   const [searchStatus, setSearchStatus] = useState<string | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null)
 
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const playerContainerRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const readyRef = useRef(false)
+  const catalogIdsRef = useRef(new Set<string>())
+  const seenIdsRef = useRef(new Set<string>())
+  const pageTokensRef = useRef<Record<string, string | undefined>>({})
+  const exhaustedRef = useRef(new Set<string>())
+  const queryTurnRef = useRef(0)
+  const searchQueryRef = useRef<string | null>(null)
+  const searchTokenRef = useRef<string | undefined>(undefined)
+  const searchSeenRef = useRef(new Set<string>())
+  const lastFeedActiveIdRef = useRef<string | null>(null)
 
+  const shorts = searchFeed ?? feedShorts
+
+  // Vídeos adicionados antes da checagem de duração existir (ou sem a
+  // chave de API configurada na hora) ficam com isShort indefinido e
+  // nunca apareciam aqui. Ao entrar na aba, confirma a duração desses
+  // itens em lote e "preenche" o catálogo, sem custo extra de API para
+  // quem já tem isShort definido.
   useEffect(() => {
-    listCatalog().then((all) => {
+    listCatalog().then(async (all) => {
       const onlyShorts = all.filter((v) => v.isShort)
-      setShorts(onlyShorts)
+      onlyShorts.forEach((v) => {
+        catalogIdsRef.current.add(v.id)
+        seenIdsRef.current.add(v.id)
+      })
+      setFeedShorts(onlyShorts)
       if (onlyShorts.length > 0) setActiveId(onlyShorts[0].id)
       setLoaded(true)
+
+      // Feed de descoberta: sem isso, quem não importa/adiciona nada
+      // manualmente nunca via nada aqui. Usa cache curto (mesma ideia
+      // da Início) pra não reabrir a busca toda vez que a aba é aberta.
+      if (hasApiKey()) {
+        if (cachedDiscovery && Date.now() - cachedAt < CACHE_TTL_MS) {
+          mergeDiscovery(cachedDiscovery, onlyShorts.length === 0)
+        } else {
+          loadDiscovery(onlyShorts.length === 0)
+        }
+      }
+
+      // Só tenta cada vídeo uma vez por sessão: reabrir a aba Shorts
+      // remonta este componente, e sem essa guarda a mesma checagem em
+      // lote era refeita toda vez — combinada com outras buscas do app,
+      // isso estourava o limite de requisições por período da API do
+      // YouTube (erro 429), mesmo sem ter estourado a cota diária.
+      const unknown = all.filter((v) => v.isShort === undefined && !checkedIdsThisSession.has(v.id))
+      if (unknown.length === 0 || !hasApiKey()) return
+      unknown.forEach((v) => checkedIdsThisSession.add(v.id))
+      try {
+        const flags = await getVideoFlags(unknown.map((v) => v.id))
+        const updates = unknown
+          .filter((v) => flags[v.id])
+          .map((v) => ({ id: v.id, isShort: flags[v.id].isShort, durationSeconds: flags[v.id].durationSeconds }))
+        if (updates.length === 0) return
+        await updateCatalogVideoFlags(updates)
+        const newlyShort = unknown
+          .filter((v) => flags[v.id]?.isShort)
+          .map((v) => ({ ...v, isShort: true, durationSeconds: flags[v.id].durationSeconds }))
+        if (newlyShort.length > 0) {
+          newlyShort.forEach((v) => catalogIdsRef.current.add(v.id))
+          setFeedShorts((current) => [...current, ...newlyShort.filter((v) => !seenIdsRef.current.has(v.id))])
+          newlyShort.forEach((v) => seenIdsRef.current.add(v.id))
+          setActiveId((current) => current ?? newlyShort[0].id)
+        }
+      } catch {
+        // Checagem em segundo plano é best-effort — falha aqui não impede o uso da aba.
+      }
     })
   }, [])
+
+  // Só a primeira consulta ao abrir a aba — buscar as 3 de uma vez
+  // (mais a checagem de duração de cada uma) é muita requisição junto,
+  // exatamente o tipo de rajada que derruba a API com erro 429. As
+  // outras 2 consultas entram aos poucos, conforme rola (loadMore).
+  async function fetchDiscovery(): Promise<Video[] | null> {
+    try {
+      const q = DISCOVERY_QUERIES[0]
+      const page = await searchShortsPage(q)
+      pageTokensRef.current[q] = page.nextPageToken
+      cachedDiscovery = page.videos
+      cachedAt = Date.now()
+      return page.videos
+    } catch (err) {
+      setDiscoveryError(err instanceof YoutubeApiError ? err.message : 'Erro ao buscar vídeos.')
+      return null
+    }
+  }
+
+  function mergeDiscovery(videos: Video[], activateFirst: boolean) {
+    const fresh = videos.filter((v) => !seenIdsRef.current.has(v.id))
+    fresh.forEach((v) => seenIdsRef.current.add(v.id))
+    if (fresh.length > 0) {
+      setFeedShorts((current) => [...current, ...fresh])
+      if (activateFirst) setActiveId((current) => current ?? fresh[0].id)
+    }
+  }
+
+  async function loadDiscovery(activateFirst: boolean) {
+    setDiscoveryError(null)
+    const videos = await fetchDiscovery()
+    if (videos) mergeDiscovery(videos, activateFirst)
+  }
+
+  // Busca mais uma página quando o usuário está chegando perto do fim
+  // da lista já carregada — da busca ativa, se houver uma, senão do
+  // feed geral (revezando entre as consultas de descoberta).
+  async function loadMore() {
+    if (!hasApiKey() || loadingMore) return
+
+    if (searchFeed !== null) {
+      if (!searchTokenRef.current || !searchQueryRef.current) return
+      setLoadingMore(true)
+      try {
+        const page = await searchShortsPage(searchQueryRef.current, searchTokenRef.current)
+        searchTokenRef.current = page.nextPageToken
+        const fresh = page.videos.filter((v) => !searchSeenRef.current.has(v.id))
+        fresh.forEach((v) => searchSeenRef.current.add(v.id))
+        if (fresh.length > 0) setSearchFeed((current) => [...(current ?? []), ...fresh])
+      } catch {
+        searchTokenRef.current = undefined
+      } finally {
+        setLoadingMore(false)
+      }
+      return
+    }
+
+    if (exhaustedRef.current.size >= DISCOVERY_QUERIES.length) return
+    let q: string | undefined
+    for (let i = 0; i < DISCOVERY_QUERIES.length; i++) {
+      const candidate = DISCOVERY_QUERIES[queryTurnRef.current % DISCOVERY_QUERIES.length]
+      queryTurnRef.current += 1
+      if (!exhaustedRef.current.has(candidate)) {
+        q = candidate
+        break
+      }
+    }
+    if (!q) return
+
+    setLoadingMore(true)
+    try {
+      const token = pageTokensRef.current[q]
+      const page = await searchShortsPage(q, token)
+      pageTokensRef.current[q] = page.nextPageToken
+      if (!page.nextPageToken) exhaustedRef.current.add(q)
+      const fresh = page.videos.filter((v) => !seenIdsRef.current.has(v.id))
+      fresh.forEach((v) => seenIdsRef.current.add(v.id))
+      if (fresh.length > 0) setFeedShorts((current) => [...current, ...fresh])
+    } catch {
+      exhaustedRef.current.add(q)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   // Player único, criado uma vez. Trocar de short só chama loadVideoById
   // na mesma instância — o mesmo padrão usado em Watch.tsx.
@@ -140,6 +314,8 @@ export default function Shorts() {
       playerRef.current = new YT.Player(playerContainerRef.current, {
         videoId: shorts[0]?.id ?? '',
         host: 'https://www.youtube-nocookie.com',
+        width: '100%',
+        height: '100%',
         playerVars: { rel: 0, autoplay: 1, controls: 0, playsinline: 1, modestbranding: 1 },
         events: {
           onReady: () => {
@@ -204,6 +380,16 @@ export default function Shorts() {
   const activeIndex = shorts.findIndex((v) => v.id === activeId)
   const activeVideo = activeIndex >= 0 ? shorts[activeIndex] : null
 
+  // Chegando perto do fim da lista já carregada, busca mais — assim a
+  // rolagem nunca "acaba" enquanto a busca (ou o feed geral) ainda
+  // tiver o que oferecer.
+  useEffect(() => {
+    if (activeIndex >= 0 && activeIndex >= shorts.length - 3) {
+      loadMore()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex, shorts.length, searchFeed])
+
   function handlePrev() {
     if (activeIndex > 0) scrollToId(shorts[activeIndex - 1].id)
   }
@@ -219,32 +405,57 @@ export default function Shorts() {
     setFavorite(await toggleFavorite(activeVideo))
   }
 
+  async function handleDeleteActive() {
+    if (!activeVideo || !catalogIdsRef.current.has(activeVideo.id)) return
+    const removedId = activeVideo.id
+    const removedIndex = activeIndex
+    await removeFromCatalog(removedId)
+    catalogIdsRef.current.delete(removedId)
+    function removeFromList(current: Video[]): Video[] {
+      const next = current.filter((v) => v.id !== removedId)
+      const nextActive = next[Math.min(removedIndex, next.length - 1)]
+      setActiveId(nextActive?.id ?? null)
+      return next
+    }
+    if (searchFeed !== null) {
+      setSearchFeed((current) => removeFromList(current ?? []))
+    } else {
+      setFeedShorts(removeFromList)
+    }
+  }
+
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault()
     const value = query.trim()
     if (!value) return
     setSearching(true)
     setSearchStatus(null)
+    lastFeedActiveIdRef.current = activeId
     try {
-      const results = await searchShorts(value)
-      setSearchResults(results)
-      if (results.length === 0) {
+      searchSeenRef.current = new Set()
+      const page = await searchShortsPage(value)
+      page.videos.forEach((v) => searchSeenRef.current.add(v.id))
+      searchTokenRef.current = page.nextPageToken
+      searchQueryRef.current = value
+      setSearchFeed(page.videos)
+      setActiveId(page.videos[0]?.id ?? null)
+      if (page.videos.length === 0) {
         setSearchStatus('Nenhum vídeo curto encontrado para essa busca.')
       }
     } catch (err) {
       setSearchStatus(err instanceof YoutubeApiError ? err.message : 'Erro ao buscar.')
-      setSearchResults(null)
     } finally {
       setSearching(false)
     }
   }
 
-  async function handleAddResult(video: Video) {
-    await addToCatalog(video)
-    setShorts((current) => [video, ...current.filter((v) => v.id !== video.id)])
-    setActiveId(video.id)
-    setSearchResults(null)
+  function handleExitSearch() {
+    setSearchFeed(null)
+    setSearchStatus(null)
     setQuery('')
+    searchQueryRef.current = null
+    searchTokenRef.current = undefined
+    setActiveId(lastFeedActiveIdRef.current ?? feedShorts[0]?.id ?? null)
   }
 
   return (
@@ -266,14 +477,10 @@ export default function Shorts() {
           >
             <SearchIcon />
           </button>
-          {searchResults !== null && (
+          {searchFeed !== null && (
             <button
               type="button"
-              onClick={() => {
-                setSearchResults(null)
-                setSearchStatus(null)
-                setQuery('')
-              }}
+              onClick={handleExitSearch}
               className="shrink-0 rounded-full px-3 py-1.5 text-sm text-neutral-300 hover:text-white"
             >
               Voltar
@@ -285,26 +492,25 @@ export default function Shorts() {
       {searchStatus && <p className="shrink-0 p-3 text-center text-sm text-neutral-300">{searchStatus}</p>}
       {searching && <p className="shrink-0 p-3 text-center text-sm text-neutral-400">Buscando…</p>}
 
-      {searchResults && searchResults.length > 0 ? (
-        <div className="grid flex-1 grid-cols-3 gap-1 overflow-y-auto p-1 sm:grid-cols-4 md:grid-cols-5">
-          {searchResults.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              onClick={() => handleAddResult(v)}
-              className="relative aspect-[9/16] overflow-hidden rounded bg-neutral-900"
-            >
-              <img src={v.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-              <span className="absolute inset-x-0 bottom-0 bg-black/70 p-1 text-left text-[11px] text-white line-clamp-2">
-                {v.title}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : loaded && shorts.length === 0 ? (
-        <div className="mx-auto max-w-md flex-1 p-8 text-center text-sm text-neutral-400">
-          Nenhum vídeo curto no catálogo ainda. Busque acima, adicione pelo Catálogo, ou importe
-          da sua conta Google — vídeos de até 1 minuto aparecem aqui automaticamente.
+      {searchFeed !== null && searchFeed.length === 0 ? null : loaded && shorts.length === 0 ? (
+        <div className="mx-auto flex max-w-md flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-neutral-400">
+          {discoveryError ? (
+            <>
+              <p>{discoveryError}</p>
+              <button
+                type="button"
+                onClick={() => loadDiscovery(true)}
+                className="rounded-full bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+              >
+                Tentar de novo
+              </button>
+            </>
+          ) : (
+            <p>
+              Nenhum vídeo curto por aqui ainda. Busque acima, adicione pelo Catálogo, ou importe
+              da sua conta Google — vídeos de até 1 minuto aparecem aqui automaticamente.
+            </p>
+          )}
         </div>
       ) : (
         <div className="relative flex-1">
@@ -376,8 +582,25 @@ export default function Shorts() {
                     >
                       <MuteIcon muted={muted} />
                     </button>
+                    {catalogIdsRef.current.has(activeVideo.id) && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteActive}
+                        title="Excluir da lista"
+                        aria-label="Excluir da lista"
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-red-600"
+                      >
+                        <TrashIcon />
+                      </button>
+                    )}
                   </div>
                 </>
+              )}
+
+              {loadingMore && (
+                <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs text-neutral-400">
+                  Carregando mais…
+                </p>
               )}
             </div>
           </div>

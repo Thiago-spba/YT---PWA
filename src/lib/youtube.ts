@@ -16,6 +16,18 @@ function assertKey(): string {
   return API_KEY
 }
 
+/**
+ * 429 e 403 são erros de limite do Google, não bugs do app — mas com
+ * mensagem genérica ("Busca falhou (429)") pareciam a mesma coisa.
+ * 429 = limite de requisições em um curto período (passa em minutos).
+ * 403 = cota diária gratuita esgotada (só volta a funcionar amanhã).
+ */
+function apiErrorMessage(action: 'Busca' | 'Consulta', status: number): string {
+  if (status === 429) return `${action} falhou: muitas buscas em pouco tempo. Aguarde alguns minutos e tente de novo.`
+  if (status === 403) return `${action} falhou: cota diária da busca esgotada. Volta a funcionar amanhã.`
+  return `${action} falhou (${status})`
+}
+
 export function extractVideoId(input: string): string | null {
   const trimmed = input.trim()
   if (/^[\w-]{11}$/.test(trimmed)) return trimmed
@@ -49,32 +61,7 @@ export async function searchVideos(query: string): Promise<Video[]> {
   })
   const res = await fetch(`${BASE_URL}/search?${params}`)
   if (!res.ok) {
-    throw new YoutubeApiError(`Busca falhou (${res.status})`)
-  }
-  const data = await res.json()
-  return data.items.map((item: any) => ({
-    id: item.id.videoId,
-    title: item.snippet.title,
-    channelTitle: item.snippet.channelTitle,
-    thumbnailUrl: resolveThumbnail(item.id.videoId, item.snippet.thumbnails),
-  }))
-}
-
-/** Busca ordenada pelas mais recentes (upload), usada na aba Início. */
-export async function searchRecent(query: string, maxResults = 12): Promise<Video[]> {
-  const key = assertKey()
-  const params = new URLSearchParams({
-    key,
-    q: query,
-    part: 'snippet',
-    type: 'video',
-    maxResults: String(maxResults),
-    safeSearch: 'strict',
-    order: 'date',
-  })
-  const res = await fetch(`${BASE_URL}/search?${params}`)
-  if (!res.ok) {
-    throw new YoutubeApiError(`Busca falhou (${res.status})`)
+    throw new YoutubeApiError(apiErrorMessage('Busca', res.status))
   }
   const data = await res.json()
   return data.items.map((item: any) => ({
@@ -90,7 +77,7 @@ export interface SearchPage {
   nextPageToken?: string
 }
 
-export async function searchVideosPage(query: string, pageToken?: string): Promise<SearchPage> {
+export async function searchVideosPage(query: string, pageToken?: string, order?: 'date'): Promise<SearchPage> {
   const key = assertKey()
   const params = new URLSearchParams({
     key,
@@ -101,9 +88,10 @@ export async function searchVideosPage(query: string, pageToken?: string): Promi
     safeSearch: 'strict',
   })
   if (pageToken) params.set('pageToken', pageToken)
+  if (order) params.set('order', order)
   const res = await fetch(`${BASE_URL}/search?${params}`)
   if (!res.ok) {
-    throw new YoutubeApiError(`Busca falhou (${res.status})`)
+    throw new YoutubeApiError(apiErrorMessage('Busca', res.status))
   }
   const data = await res.json()
   return {
@@ -132,7 +120,7 @@ export async function getVideoById(id: string): Promise<Video | null> {
   const params = new URLSearchParams({ key, id, part: 'snippet,contentDetails,status' })
   const res = await fetch(`${BASE_URL}/videos?${params}`)
   if (!res.ok) {
-    throw new YoutubeApiError(`Consulta falhou (${res.status})`)
+    throw new YoutubeApiError(apiErrorMessage('Consulta', res.status))
   }
   const data = await res.json()
   const item = data.items?.[0]
@@ -149,15 +137,17 @@ export async function getVideoById(id: string): Promise<Video | null> {
     channelTitle: item.snippet.channelTitle,
     thumbnailUrl: resolveThumbnail(item.id, item.snippet.thumbnails),
     isShort: seconds !== null ? seconds > 0 && seconds <= SHORT_MAX_SECONDS : undefined,
+    durationSeconds: seconds ?? undefined,
   }
 }
 
 /**
  * Busca vídeos e devolve só os que são Shorts de verdade (≤60s) e
  * incorporáveis. Usa `videoDuration=short` (filtro grosso da API, até
- * 4 min) e depois confirma a duração exata via `getVideoFlags`.
+ * 4 min) e depois confirma a duração exata via `getVideoFlags`. Aceita
+ * `pageToken` para rolagem infinita (mesmo padrão de `searchVideosPage`).
  */
-export async function searchShorts(query: string): Promise<Video[]> {
+export async function searchShortsPage(query: string, pageToken?: string): Promise<SearchPage> {
   const key = assertKey()
   const params = new URLSearchParams({
     key,
@@ -168,9 +158,10 @@ export async function searchShorts(query: string): Promise<Video[]> {
     safeSearch: 'strict',
     videoDuration: 'short',
   })
+  if (pageToken) params.set('pageToken', pageToken)
   const res = await fetch(`${BASE_URL}/search?${params}`)
   if (!res.ok) {
-    throw new YoutubeApiError(`Busca falhou (${res.status})`)
+    throw new YoutubeApiError(apiErrorMessage('Busca', res.status))
   }
   const data = await res.json()
   const candidates: Video[] = data.items.map((item: any) => ({
@@ -180,14 +171,20 @@ export async function searchShorts(query: string): Promise<Video[]> {
     thumbnailUrl: resolveThumbnail(item.id.videoId, item.snippet.thumbnails),
   }))
   const flags = await getVideoFlags(candidates.map((v) => v.id))
-  return candidates
+  const videos = candidates
     .filter((v) => flags[v.id]?.isShort && flags[v.id]?.embeddable)
-    .map((v) => ({ ...v, isShort: true }))
+    .map((v) => ({ ...v, isShort: true, durationSeconds: flags[v.id]?.durationSeconds }))
+  return { videos, nextPageToken: data.nextPageToken }
+}
+
+export async function searchShorts(query: string): Promise<Video[]> {
+  return (await searchShortsPage(query)).videos
 }
 
 export interface VideoFlags {
   isShort: boolean
   embeddable: boolean
+  durationSeconds: number
 }
 
 /** Busca duração e permissão de incorporação de até 50 vídeos de uma vez. */
@@ -206,6 +203,7 @@ export async function getVideoFlags(ids: string[]): Promise<Record<string, Video
       flags[item.id] = {
         isShort: seconds > 0 && seconds <= SHORT_MAX_SECONDS,
         embeddable: item.status?.embeddable !== false,
+        durationSeconds: seconds,
       }
     }
   }

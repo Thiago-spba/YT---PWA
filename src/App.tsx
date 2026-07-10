@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   getDailyLimitMinutes,
   getUsageMinutesToday,
   isOnboardingDone,
   isParentalControlEnabled,
 } from './lib/storage'
+import { applyPendingUpdate } from './lib/pwaUpdate'
 import type { Video } from './types'
 import Onboarding from './components/Onboarding'
 import TopBar from './components/TopBar'
@@ -35,6 +36,15 @@ function App() {
   const [queue, setQueue] = useState<Video[]>([])
   const [timeUp, setTimeUp] = useState(limitReachedNow())
   const [catalogVersion, setCatalogVersion] = useState(0)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+
+  useEffect(() => {
+    function handleUpdateAvailable() {
+      setUpdateAvailable(true)
+    }
+    window.addEventListener('pwa-update-available', handleUpdateAvailable)
+    return () => window.removeEventListener('pwa-update-available', handleUpdateAvailable)
+  }, [])
 
   if (!onboardingDone) {
     return <Onboarding onDone={() => setOnboardingDone(true)} />
@@ -72,6 +82,18 @@ function App() {
   return (
     <div className="min-h-svh bg-neutral-50 dark:bg-neutral-950">
       <TopBar view={view} onChange={handleChangeView} />
+      {updateAvailable && (
+        <div className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-2 rounded border border-violet-400 bg-violet-50 p-3 text-sm text-violet-800 dark:border-violet-600 dark:bg-violet-950 dark:text-violet-200">
+          <span>Nova versão do app disponível.</span>
+          <button
+            type="button"
+            onClick={applyPendingUpdate}
+            className="rounded bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
+          >
+            Atualizar agora
+          </button>
+        </div>
+      )}
       {timeUp && (
         <div className="mx-4 mt-4 rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-950 dark:text-amber-200">
           Tempo de uso de hoje esgotado. Volte amanhã ou peça para o

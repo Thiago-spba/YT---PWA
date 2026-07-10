@@ -181,7 +181,7 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
       const flags = await getVideoFlags(videos.map((v) => v.id))
       const kept = videos
         .filter((v) => flags[v.id]?.embeddable !== false)
-        .map((v) => ({ ...v, isShort: flags[v.id]?.isShort }))
+        .map((v) => ({ ...v, isShort: flags[v.id]?.isShort, durationSeconds: flags[v.id]?.durationSeconds }))
       return { videos: kept, skipped: videos.length - kept.length }
     } catch {
       return { videos, skipped: 0 }
@@ -263,7 +263,7 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
         onClick={() => (open ? closePanel() : setOpen(true))}
         aria-label="Configurações"
         title="Configurações"
-        className="fixed bottom-4 left-4 z-40 flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-violet-600 text-white shadow-lg hover:bg-violet-700"
+        className="fixed bottom-4 left-4 z-[45] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-violet-600 text-white shadow-lg hover:bg-violet-700"
       >
         {profile ? (
           <img src={profile.picture} alt={profile.name} className="h-full w-full object-cover" />
@@ -275,10 +275,10 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-30 bg-black/30" onClick={closePanel}>
+        <div className="fixed inset-0 z-[44] bg-black/30" onClick={closePanel}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="fixed bottom-20 left-4 z-40 max-h-[70vh] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-xl bg-white p-4 shadow-xl dark:bg-neutral-900"
+            className="fixed bottom-20 left-4 z-[45] max-h-[70vh] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-xl bg-white p-4 shadow-xl dark:bg-neutral-900"
           >
             {needsPinToView ? (
               <form onSubmit={handleUnlock} className="flex flex-col gap-3">

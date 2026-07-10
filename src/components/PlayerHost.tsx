@@ -9,8 +9,22 @@ import {
   setAutoplayEnabled,
 } from '../lib/storage'
 import { hasApiKey, searchVideosPage } from '../lib/youtube'
-import { loadYouTubeApi, YT_PLAYER_STATE_ENDED, type YTPlayer } from '../lib/youtubePlayer'
+import {
+  enablePictureInPicture,
+  isDocumentPipSupported,
+  loadYouTubeApi,
+  openDocumentPip,
+  YT_PLAYER_STATE_ENDED,
+  type DocumentPipHandle,
+  type YTPlayer,
+} from '../lib/youtubePlayer'
 import VideoCard from './VideoCard'
+
+function findNaturalNext(all: Video[], currentId: string, fallback: Video[]): Video | undefined {
+  const idx = all.findIndex((v) => v.id === currentId)
+  if (idx !== -1 && idx + 1 < all.length) return all[idx + 1]
+  return fallback[0]
+}
 
 export type PlayerMode = 'mini' | 'expanded'
 
@@ -81,6 +95,15 @@ function ChevronRightIcon() {
   )
 }
 
+function PipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <rect x="3" y="4" width="18" height="14" rx="2" />
+      <rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 const iconButtonClass =
   'flex h-9 w-9 items-center justify-center rounded-full bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-700 dark:hover:bg-neutral-600'
 const iconButtonClassDark =
@@ -106,11 +129,16 @@ export default function PlayerHost({
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined)
   const [loadingMore, setLoadingMore] = useState(false)
   const [autoplay, setAutoplay] = useState(isAutoplayEnabled())
+  const [pipActive, setPipActive] = useState(false)
+  const [pipMessage, setPipMessage] = useState<string | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
+  const pipHandleRef = useRef<DocumentPipHandle | null>(null)
   const readyRef = useRef(false)
   const feedRef = useRef<Video[]>([])
+  const catalogAllRef = useRef<Video[]>([])
+  const currentVideoIdRef = useRef(video.id)
   const queueRef = useRef<Video[]>(queue)
   const autoplayRef = useRef(autoplay)
   const onSelectRef = useRef(onSelect)
@@ -150,10 +178,13 @@ export default function PlayerHost({
       playerRef.current = new YT.Player(containerRef.current, {
         videoId: video.id,
         host: 'https://www.youtube-nocookie.com',
+        width: '100%',
+        height: '100%',
         playerVars: { rel: 0, autoplay: 1, modestbranding: 1 },
         events: {
           onReady: () => {
             readyRef.current = true
+            if (playerRef.current) enablePictureInPicture(playerRef.current)
           },
           onError: () => setVideoError(true),
           onStateChange: (e) => {
@@ -164,7 +195,7 @@ export default function PlayerHost({
               onSelectRef.current(fromQueue)
               return
             }
-            const next = feedRef.current[0]
+            const next = findNaturalNext(catalogAllRef.current, currentVideoIdRef.current, feedRef.current)
             if (next) onSelectRef.current(next)
           },
         },
@@ -178,6 +209,53 @@ export default function PlayerHost({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Cleanup declarado depois do efeito de criação do player: no unmount,
+  // o React roda limpezas na ordem inversa, então esta roda ANTES da de
+  // cima — devolve o iframe pro documento principal antes de destruir o
+  // player, evitando destruir um nó que está dentro da janela PiP.
+  useEffect(() => {
+    return () => {
+      pipHandleRef.current?.close()
+      pipHandleRef.current = null
+    }
+  }, [])
+
+  // Auto-esconde o aviso de PiP depois de um tempo — mensagem não deve
+  // bloquear a tela (ao contrário de um window.alert, que trava a aba
+  // inteira até o usuário clicar OK).
+  useEffect(() => {
+    if (!pipMessage) return
+    const timeout = setTimeout(() => setPipMessage(null), 5000)
+    return () => clearTimeout(timeout)
+  }, [pipMessage])
+
+  async function handleTogglePip() {
+    if (pipActive) {
+      pipHandleRef.current?.close()
+      pipHandleRef.current = null
+      setPipActive(false)
+      return
+    }
+    if (!isDocumentPipSupported()) {
+      setPipMessage(
+        'Picture-in-Picture não é suportado neste navegador. Funciona no Chrome ou Edge (computador ou Android) — em outros navegadores o vídeo pausa ao trocar de app, como esperado.',
+      )
+      return
+    }
+    const iframe = playerRef.current?.getIframe()
+    if (!iframe) return
+    try {
+      const handle = await openDocumentPip(iframe, { width: 320, height: 180 }, () => {
+        setPipActive(false)
+        pipHandleRef.current = null
+      })
+      pipHandleRef.current = handle
+      setPipActive(true)
+    } catch {
+      setPipMessage('Não foi possível abrir o Picture-in-Picture agora. Tente novamente.')
+    }
+  }
 
   // Pilha de navegação (estilo histórico do navegador).
   useEffect(() => {
@@ -213,19 +291,30 @@ export default function PlayerHost({
       onSelect(fromQueue)
       return
     }
-    const next = feedRef.current[0]
+    const next = findNaturalNext(catalogAllRef.current, currentVideoIdRef.current, feedRef.current)
     if (next) onSelect(next)
   }
 
+  const feed = [...catalogFeed, ...suggested]
+
   const canGoPrev = indexRef.current > 0
-  const canGoNext = indexRef.current < stackRef.current.length - 1 || queue.length > 0 || feedRef.current.length > 0
+  // Usa `feed` (derivado de state, sempre fresco neste render) em vez de
+  // feedRef.current aqui: feedRef só é atualizado por um efeito que roda
+  // depois do commit, então usá-lo direto no render deixava o botão
+  // "Próximo" preso como desabilitado por um ciclo a mais sempre que o
+  // catálogo/sugestões chegavam depois da troca de vídeo.
+  const canGoNext = indexRef.current < stackRef.current.length - 1 || queue.length > 0 || feed.length > 0
 
   useEffect(() => {
+    currentVideoIdRef.current = video.id
     recordHistory(video)
     isFavorite(video.id).then(setFavorite)
     setVideoError(false)
 
-    listCatalog().then((all) => setCatalogFeed(all.filter((v) => v.id !== video.id)))
+    listCatalog().then((all) => {
+      catalogAllRef.current = all
+      setCatalogFeed(all.filter((v) => v.id !== video.id))
+    })
 
     setSuggested([])
     setNextPageToken(undefined)
@@ -291,7 +380,34 @@ export default function PlayerHost({
     setFavorite(await toggleFavorite(video))
   }
 
-  const feed = [...catalogFeed, ...suggested]
+  // Media Session: mostra título/miniatura e controles de play/pausa/
+  // anterior/próximo na notificação e na tela de bloqueio do celular.
+  // Sinaliza pro navegador que isso é reprodução de mídia de verdade —
+  // ajuda o áudio a continuar tocando ao trocar de app (o navegador não
+  // suspende tão facilmente uma aba com sessão de mídia ativa).
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: video.title,
+      artist: video.channelTitle,
+      artwork: video.thumbnailUrl ? [{ src: video.thumbnailUrl, sizes: '320x180', type: 'image/jpeg' }] : [],
+    })
+  }, [video])
+
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.setActionHandler('play', () => playerRef.current?.playVideo())
+    navigator.mediaSession.setActionHandler('pause', () => playerRef.current?.pauseVideo())
+    navigator.mediaSession.setActionHandler('previoustrack', canGoPrev ? handlePrev : null)
+    navigator.mediaSession.setActionHandler('nexttrack', canGoNext ? handleNext : null)
+    return () => {
+      navigator.mediaSession.setActionHandler('play', null)
+      navigator.mediaSession.setActionHandler('pause', null)
+      navigator.mediaSession.setActionHandler('previoustrack', null)
+      navigator.mediaSession.setActionHandler('nexttrack', null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canGoPrev, canGoNext])
 
   useEffect(() => {
     feedRef.current = feed
@@ -313,8 +429,12 @@ export default function PlayerHost({
         visual === 'mini'
           ? 'fixed bottom-20 right-4 z-40 flex w-56 flex-col overflow-hidden rounded-lg bg-black shadow-2xl sm:w-64'
           : visual === 'fullscreen'
-            ? 'fixed inset-0 z-50 flex flex-col bg-black'
-            : 'fixed inset-0 z-40 flex flex-col overflow-y-auto bg-white dark:bg-neutral-950'
+            ? 'fixed inset-0 z-50 bg-black'
+            : // top-[50px] deixa a barra de navegação (~49px de altura) de fora
+              // da área coberta pelo player — sem isso, o modo janela cobria a
+              // tela inteira por cima do TopBar, e tentar trocar de aba acabava
+              // clicando em botões do próprio player por engano.
+              'fixed inset-x-0 bottom-0 top-[50px] z-40 grid grid-cols-1 gap-x-6 gap-y-3 overflow-y-auto bg-white px-4 pb-10 pt-3 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-10 dark:bg-neutral-950'
       }
     >
       <div
@@ -322,8 +442,8 @@ export default function PlayerHost({
           visual === 'mini'
             ? 'flex items-center justify-between gap-1 bg-neutral-900 px-2 py-1'
             : visual === 'fullscreen'
-              ? 'order-1 flex items-center justify-between bg-neutral-900 p-3 text-white'
-              : 'order-2 mx-auto mt-3 flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 px-4'
+              ? 'absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent p-3 text-white'
+              : 'flex w-full flex-wrap items-center justify-between gap-2 [grid-area:2/1/3/2]'
         }
       >
         {visual === 'windowed' ? (
@@ -349,6 +469,23 @@ export default function PlayerHost({
               }
             >
               <StarIcon filled={favorite} />
+            </button>
+          )}
+          {visual !== 'mini' && (
+            <button
+              type="button"
+              onClick={handleTogglePip}
+              title={pipActive ? 'Sair do Picture-in-Picture' : 'Ativar Picture-in-Picture'}
+              aria-label={pipActive ? 'Sair do Picture-in-Picture' : 'Ativar Picture-in-Picture'}
+              className={
+                pipActive
+                  ? 'flex h-9 w-9 items-center justify-center rounded-full bg-violet-600 text-white'
+                  : visual === 'fullscreen'
+                    ? iconButtonClassDark
+                    : iconButtonClass
+              }
+            >
+              <PipIcon />
             </button>
           )}
           {visual === 'mini' ? (
@@ -400,95 +537,136 @@ export default function PlayerHost({
           visual === 'mini'
             ? 'relative aspect-video w-full bg-black'
             : visual === 'fullscreen'
-              ? 'order-2 relative flex-1'
-              : 'order-1 relative mx-auto w-full max-w-5xl overflow-hidden rounded-lg bg-black px-4'
+              ? 'absolute inset-0'
+              : 'relative w-full [grid-area:1/1/2/2]'
         }
       >
-        <div ref={containerRef} className="h-full w-full" />
+        {/*
+          Espaçador com padding-bottom percentual em vez de `aspect-video`:
+          dentro deste grid (janela de assistir), o CSS Grid dimensiona a
+          linha ANTES de considerar `aspect-ratio`, fazendo o player "vazar"
+          por cima do título. Padding percentual é altura de verdade (soma
+          na caixa), então o grid mede certo — técnica clássica, mais
+          confiável que aspect-ratio dentro de grid.
+        */}
+        <div className={visual === 'windowed' ? 'pb-[56.25%]' : 'hidden'} />
+        <div
+          className={
+            visual === 'windowed'
+              ? 'absolute inset-0 overflow-hidden rounded-xl bg-black'
+              : 'absolute inset-0'
+          }
+        >
+          <div ref={containerRef} className="h-full w-full" />
 
-        {visual !== 'mini' && (
-          <>
-            <button
-              type="button"
-              onClick={handlePrev}
-              disabled={!canGoPrev}
-              title="Vídeo anterior"
-              aria-label="Vídeo anterior"
-              className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-0"
-            >
-              <ChevronLeftIcon />
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={!canGoNext}
-              title="Próximo vídeo"
-              aria-label="Próximo vídeo"
-              className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-0"
-            >
-              <ChevronRightIcon />
-            </button>
-          </>
-        )}
+          {pipActive && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black p-4 text-center text-sm text-white">
+              <PipIcon />
+              <p>Tocando em Picture-in-Picture (janela flutuante).</p>
+            </div>
+          )}
 
-        {videoError && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/95 p-4 text-center text-white">
-            <p className="text-sm">
-              Este vídeo não está disponível (foi removido, ou o dono não permite assistir
-              fora do YouTube).
-            </p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded bg-violet-600 px-4 py-2 text-sm font-medium hover:bg-violet-700"
-            >
-              Voltar ao catálogo
-            </button>
-          </div>
-        )}
+          {pipMessage && (
+            <div className="absolute inset-x-2 bottom-2 z-20 flex items-start justify-between gap-2 rounded-lg bg-black/85 p-3 text-xs text-white sm:text-sm">
+              <p>{pipMessage}</p>
+              <button
+                type="button"
+                onClick={() => setPipMessage(null)}
+                aria-label="Fechar aviso"
+                className="shrink-0 text-white/70 hover:text-white"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+          )}
+
+          {visual !== 'mini' && (
+            <>
+              <button
+                type="button"
+                onClick={handlePrev}
+                disabled={!canGoPrev}
+                title="Vídeo anterior"
+                aria-label="Vídeo anterior"
+                className="absolute left-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-0"
+              >
+                <ChevronLeftIcon />
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!canGoNext}
+                title="Próximo vídeo"
+                aria-label="Próximo vídeo"
+                className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-0"
+              >
+                <ChevronRightIcon />
+              </button>
+            </>
+          )}
+
+          {videoError && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/95 p-4 text-center text-white">
+              <p className="text-sm">
+                Este vídeo não está disponível (foi removido, ou o dono não permite assistir
+                fora do YouTube).
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded bg-violet-600 px-4 py-2 text-sm font-medium hover:bg-violet-700"
+              >
+                Voltar ao catálogo
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {visual === 'windowed' && (
-        <div className="order-3 mx-auto w-full max-w-5xl px-4 pb-10">
-          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-            Toque em "Minimizar" para continuar assistindo numa janelinha enquanto navega por
-            outras páginas do app.
-          </p>
+        <p className="text-xs text-neutral-500 [grid-area:3/1/4/2] dark:text-neutral-400">
+          Toque em "Minimizar" para continuar assistindo numa janelinha enquanto navega por
+          outras páginas do app.
+        </p>
+      )}
 
-          {feed.length > 0 && (
-            <section className="mt-6">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h2 className="text-lg font-semibold">Mais vídeos</h2>
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
-                  Reprodução automática
-                  <button
-                    type="button"
-                    onClick={handleToggleAutoplay}
-                    aria-label="Reprodução automática"
-                    className={`relative h-6 w-11 rounded-full transition ${
-                      autoplay ? 'bg-violet-600' : 'bg-neutral-300 dark:bg-neutral-700'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
-                        autoplay ? 'left-5' : 'left-0.5'
-                      }`}
-                    />
-                  </button>
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                {feed.map((v) => (
-                  <VideoCard key={v.id} video={v} onSelect={onSelect} />
-                ))}
-              </div>
-              <div ref={sentinelRef} className="h-4" />
-              {loadingMore && (
-                <p className="mt-2 text-center text-sm text-neutral-500 dark:text-neutral-400">
-                  Carregando mais vídeos…
-                </p>
-              )}
-            </section>
+      {visual === 'windowed' && (
+        // lg:max-h + overflow-y-auto: sem isso, com muitos vídeos em
+        // "A seguir" essa coluna (que ocupa as 3 linhas do grid ao lado
+        // do vídeo) ficava mais alta que o vídeo+título, e o CSS Grid
+        // esticava a linha do vídeo pra acompanhar — resultado: área
+        // preta desproporcional, vídeo pequeno lá embaixo, precisando
+        // rolar pra ver direito. Limitando a altura dessa coluna e
+        // deixando ela rolar sozinha, o grid não estica mais.
+        <div className="flex flex-col gap-3 [grid-area:4/1/5/2] lg:max-h-[75vh] lg:overflow-y-auto lg:[grid-area:1/2/4/3]">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">A seguir</h2>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+              Automático
+              <button
+                type="button"
+                onClick={handleToggleAutoplay}
+                aria-label="Reprodução automática"
+                className={`relative h-6 w-11 rounded-full transition ${
+                  autoplay ? 'bg-violet-600' : 'bg-neutral-300 dark:bg-neutral-700'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+                    autoplay ? 'left-5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </label>
+          </div>
+          <div className="flex flex-col gap-1">
+            {feed.map((v) => (
+              <VideoCard key={v.id} video={v} onSelect={onSelect} variant="list" />
+            ))}
+          </div>
+          <div ref={sentinelRef} className="h-4" />
+          {loadingMore && (
+            <p className="text-center text-sm text-neutral-500 dark:text-neutral-400">Carregando mais vídeos…</p>
           )}
         </div>
       )}

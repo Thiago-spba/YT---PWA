@@ -38,6 +38,26 @@ export async function removeFromCatalog(id: string): Promise<void> {
   await db.delete('catalog', id)
 }
 
+/**
+ * Atualiza isShort/durationSeconds de itens já salvos, sem mexer em
+ * addedAt (preserva a posição no catálogo) — usado para "preencher"
+ * vídeos antigos que foram adicionados antes da checagem de duração
+ * existir, ou sem a chave de API configurada na hora.
+ */
+export async function updateCatalogVideoFlags(
+  updates: { id: string; isShort?: boolean; durationSeconds?: number }[],
+): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction('catalog', 'readwrite')
+  for (const u of updates) {
+    const existing = await tx.store.get(u.id)
+    if (existing) {
+      await tx.store.put({ ...existing, isShort: u.isShort, durationSeconds: u.durationSeconds })
+    }
+  }
+  await tx.done
+}
+
 export async function listCatalog(): Promise<CatalogEntry[]> {
   const db = await getDB()
   const all = await db.getAll('catalog')
