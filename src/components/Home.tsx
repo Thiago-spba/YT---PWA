@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Video } from '../types'
+import type { HistoryEntry, Video } from '../types'
 import VideoCard from './VideoCard'
-import { getTopCategories, listCatalog, recordInterest, removeFromCatalog } from '../lib/db'
+import { getTopCategories, listCatalog, listHistory, recordInterest, removeFromCatalog } from '../lib/db'
 import { categorize } from '../lib/categories'
 import { expandSearchTerm } from '../lib/aiSearch'
-import { extractVideoId, getVideoById, hasApiKey, searchVideos, searchVideosPage, YoutubeApiError } from '../lib/youtube'
+import { getSuggestions } from '../lib/searchSuggest'
+import { extractVideoId, getVideoById, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
 interface Props {
@@ -77,9 +78,13 @@ export default function Home({ onSelect }: Props) {
   // Busca inteligente (autocomplete + resultados) — antes ficava presa
   // dentro de "Meus Canais"; agora mora na Home, a tela principal.
   const [input, setInput] = useState('')
-  const [suggestions, setSuggestions] = useState<Video[]>([])
+  const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  // Histórico de vídeos assistidos (item 3), corpus da Fonte 1 do
+  // autocomplete. Carregado uma vez e atualizado ao focar o campo — assim
+  // não se bate no IndexedDB a cada tecla digitada.
+  const historyRef = useRef<HistoryEntry[]>([])
   const [searchQuery, setSearchQuery] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Video[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -102,6 +107,10 @@ export default function Home({ onSelect }: Props) {
 
     getTopCategories(5).then((categories) => {
       topCategoriesRef.current = categories
+    })
+
+    listHistory().then((h) => {
+      historyRef.current = h
     })
 
     if (!hasApiKey()) return
@@ -226,22 +235,36 @@ export default function Home({ onSelect }: Props) {
     setCatalogVideos((current) => current.filter((v) => v.id !== video.id))
   }
 
-  // Sugestões enquanto digita (debounce) — só quando parece texto de
-  // busca, não quando já é um link/ID reconhecível.
+  // Autocomplete inteligente (item 6): sugere termos enquanto digita, a
+  // partir do histórico local (custo zero) e, só quando este devolve menos
+  // de 3 sugestões, complementa com a IA (Vercel Function do item 4). Não
+  // sugere quando o texto já é um link/ID reconhecível.
   useEffect(() => {
     const value = input.trim()
-    if (!hasApiKey() || value.length < 3 || extractVideoId(value)) {
+    if (value.length < 3 || extractVideoId(value)) {
       setSuggestions([])
+      setSuggestLoading(false)
       return
     }
+    let active = true
     setSuggestLoading(true)
+    // Debounce de 300ms: evita disparar a Fonte 2 (IA) a cada tecla.
     const timer = setTimeout(() => {
-      searchVideos(value)
-        .then((results) => setSuggestions(results.slice(0, 6)))
-        .catch(() => setSuggestions([]))
-        .finally(() => setSuggestLoading(false))
-    }, 450)
-    return () => clearTimeout(timer)
+      getSuggestions(value, historyRef.current, hasApiKey())
+        .then((terms) => {
+          if (active) setSuggestions(terms)
+        })
+        .catch(() => {
+          if (active) setSuggestions([])
+        })
+        .finally(() => {
+          if (active) setSuggestLoading(false)
+        })
+    }, 300)
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
   }, [input])
 
   useEffect(() => {
@@ -256,7 +279,14 @@ export default function Home({ onSelect }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const value = input.trim()
+    await runSearch(input)
+  }
+
+  // Executa a busca de um termo (submit do campo ou clique numa sugestão do
+  // autocomplete). Detecta link/ID de vídeo e, caso contrário, faz busca por
+  // texto com expansão por IA (item 4).
+  async function runSearch(rawValue: string) {
+    const value = rawValue.trim()
     if (!value) return
 
     const id = extractVideoId(value)
@@ -337,10 +367,10 @@ export default function Home({ onSelect }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, searchLoadingMore])
 
-  function handleSelectSuggestion(video: Video) {
+  function handleSelectSuggestion(term: string) {
     setShowSuggestions(false)
-    setInput('')
-    onSelect(video)
+    setInput(term)
+    runSearch(term)
   }
 
   function handleClearSearch() {
@@ -361,7 +391,14 @@ export default function Home({ onSelect }: Props) {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onFocus={() => setShowSuggestions(true)}
+            onFocus={() => {
+              setShowSuggestions(true)
+              // Revalida o histórico ao focar — cobre vídeos assistidos
+              // depois que a Home montou, sem consultar o banco por tecla.
+              listHistory().then((h) => {
+                historyRef.current = h
+              })
+            }}
             placeholder={
               hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
             }
@@ -382,23 +419,20 @@ export default function Home({ onSelect }: Props) {
         {showSuggestions && (suggestLoading || suggestions.length > 0) && (
           <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
             {suggestLoading && suggestions.length === 0 && (
-              <p className="p-3 text-sm text-neutral-500 dark:text-neutral-400">Buscando…</p>
+              <p className="p-3 text-sm text-neutral-500 dark:text-neutral-400">Buscando sugestões…</p>
             )}
-            {suggestions.map((v) => (
+            {suggestions.map((term) => (
               <button
-                key={v.id}
+                key={term}
                 type="button"
-                onClick={() => handleSelectSuggestion(v)}
-                className="flex w-full items-center gap-2 p-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700"
+                onClick={() => handleSelectSuggestion(term)}
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-700"
               >
-                <img src={v.thumbnailUrl} alt="" className="h-10 w-16 shrink-0 rounded object-cover" />
-                <span className="min-w-0">
-                  <span className="block truncate font-medium text-neutral-800 dark:text-neutral-100">
-                    {v.title}
-                  </span>
-                  <span className="block truncate text-xs text-neutral-500 dark:text-neutral-400">
-                    {v.channelTitle}
-                  </span>
+                <span className="shrink-0 text-neutral-400 dark:text-neutral-500">
+                  <SearchIcon />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-neutral-800 dark:text-neutral-100">
+                  {term}
                 </span>
               </button>
             ))}
@@ -409,6 +443,15 @@ export default function Home({ onSelect }: Props) {
       {searchStatus && (
         <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-600 dark:text-neutral-300">
           {searchStatus}
+        </p>
+      )}
+
+      {/* Busca por texto passa pela expansão por IA + consulta ao YouTube —
+          pode passar de meio segundo, então mostra estado de carregamento
+          enquanto os resultados não chegam (item 7, sub-item 5). */}
+      {searchLoading && !searchResults && (
+        <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-500 dark:text-neutral-400">
+          Buscando…
         </p>
       )}
 

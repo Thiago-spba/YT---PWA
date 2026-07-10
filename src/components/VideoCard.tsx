@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Video } from '../types'
 import { resolveThumbnail } from '../lib/thumbnail'
 import { formatDuration } from '../lib/format'
-import { isFavorite, isInPlaylist, toggleFavorite, toggleInPlaylist } from '../lib/db'
+import { getFavoriteIds, getPlaylistIds, toggleFavorite, toggleInPlaylist } from '../lib/db'
 
 interface Props {
   video: Video
@@ -59,9 +59,19 @@ export default function VideoCard({ video, onSelect, variant = 'grid', onDelete 
   const [inPlaylist, setInPlaylist] = useState(false)
   const [favorite, setFavorite] = useState(false)
 
+  // Lê dos conjuntos cacheados (uma leitura ao banco por sessão, reusada
+  // por todos os cards) em vez de duas leituras próprias por card.
   useEffect(() => {
-    isInPlaylist(video.id).then(setInPlaylist)
-    isFavorite(video.id).then(setFavorite)
+    let active = true
+    getPlaylistIds().then((ids) => {
+      if (active) setInPlaylist(ids.has(video.id))
+    })
+    getFavoriteIds().then((ids) => {
+      if (active) setFavorite(ids.has(video.id))
+    })
+    return () => {
+      active = false
+    }
   }, [video.id])
 
   async function handleTogglePlaylist(e: React.MouseEvent) {

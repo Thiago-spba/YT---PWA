@@ -68,14 +68,63 @@ export async function listCatalog(): Promise<CatalogEntry[]> {
   return all.sort((a, b) => b.addedAt - a.addedAt)
 }
 
+// Cache em memória dos IDs de favoritos e da playlist (item 7, otimização
+// de performance). Antes, cada VideoCard fazia 2 leituras próprias ao
+// IndexedDB ao montar — num feed com dezenas/centenas de cards, isso virava
+// centenas de micro-transações. Agora cada conjunto é lido uma vez
+// (`getAllKeys`) e reusado por todos os cards; os toggles abaixo mantêm o
+// cache em dia, então grids e telas permanecem consistentes. Leituras
+// diretas (`isFavorite`/`isInPlaylist`, usadas fora dos grids) continuam
+// batendo no banco, que é sempre a verdade — o cache é só uma otimização
+// para renderizar listas longas. Mesmo padrão dos caches de módulo já
+// usados em Home e useShortsFeed.
+let favoriteIdsCache: Set<string> | null = null
+let playlistIdsCache: Set<string> | null = null
+// Promessa em voo: quando dezenas de cards montam juntos no primeiro
+// render, todos compartilham uma única leitura ao banco em vez de disparar
+// uma cada. Depois de resolvida, o Set cacheado (`*IdsCache`) atende as
+// próximas chamadas de forma síncrona e é o que os toggles mantêm em dia.
+let favoriteIdsPromise: Promise<Set<string>> | null = null
+let playlistIdsPromise: Promise<Set<string>> | null = null
+
+/** Conjunto de IDs favoritados, lido do banco só uma vez por sessão. */
+export async function getFavoriteIds(): Promise<Set<string>> {
+  if (favoriteIdsCache) return favoriteIdsCache
+  if (!favoriteIdsPromise) {
+    favoriteIdsPromise = (async () => {
+      const db = await getDB()
+      const set = new Set<string>(await db.getAllKeys('favorites'))
+      favoriteIdsCache = set
+      return set
+    })()
+  }
+  return favoriteIdsPromise
+}
+
+/** Conjunto de IDs na playlist, lido do banco só uma vez por sessão. */
+export async function getPlaylistIds(): Promise<Set<string>> {
+  if (playlistIdsCache) return playlistIdsCache
+  if (!playlistIdsPromise) {
+    playlistIdsPromise = (async () => {
+      const db = await getDB()
+      const set = new Set<string>(await db.getAllKeys('playlist'))
+      playlistIdsCache = set
+      return set
+    })()
+  }
+  return playlistIdsPromise
+}
+
 export async function toggleFavorite(video: Video): Promise<boolean> {
   const db = await getDB()
   const existing = await db.get('favorites', video.id)
   if (existing) {
     await db.delete('favorites', video.id)
+    favoriteIdsCache?.delete(video.id)
     return false
   }
   await db.put('favorites', { ...video, addedAt: Date.now() })
+  favoriteIdsCache?.add(video.id)
   return true
 }
 
@@ -136,18 +185,21 @@ export async function toggleInPlaylist(video: Video): Promise<boolean> {
   if (existing) {
     await store.delete(video.id)
     await tx.done
+    playlistIdsCache?.delete(video.id)
     return false
   }
   const all = await store.getAll()
   const maxPosition = all.reduce((max, v) => Math.max(max, v.position), -1)
   await store.put({ ...video, position: maxPosition + 1, addedAt: Date.now() })
   await tx.done
+  playlistIdsCache?.add(video.id)
   return true
 }
 
 export async function removeFromPlaylist(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('playlist', id)
+  playlistIdsCache?.delete(id)
 }
 
 export async function movePlaylistItem(id: string, direction: 'up' | 'down'): Promise<void> {

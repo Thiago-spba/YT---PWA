@@ -119,6 +119,8 @@ function ShortThumb({ video, isActive, registerRef, onVisible }: ThumbProps) {
         <img
           src={video.thumbnailUrl}
           alt=""
+          loading="lazy"
+          decoding="async"
           className={`h-full w-full object-cover transition-opacity ${isActive ? 'opacity-0' : 'opacity-100'}`}
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-10 text-white">

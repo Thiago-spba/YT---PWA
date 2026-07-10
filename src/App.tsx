@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   getDailyLimitMinutes,
   getUsageMinutesToday,
@@ -7,18 +7,32 @@ import {
 } from './lib/storage'
 import { applyPendingUpdate } from './lib/pwaUpdate'
 import type { Video } from './types'
-import Onboarding from './components/Onboarding'
 import TopBar from './components/TopBar'
 import Home from './components/Home'
-import Catalog from './components/Catalog'
-import Favorites from './components/Favorites'
-import Playlist from './components/Playlist'
-import History from './components/History'
-import ShortsScreen from './components/ShortsScreen'
-import PlayerHost, { type PlayerMode } from './components/PlayerHost'
 import Footer from './components/Footer'
-import AccountPanel from './components/AccountPanel'
 import ThemeToggle from './components/ThemeToggle'
+import type { PlayerMode } from './components/PlayerHost'
+
+// Code splitting (item 7): só a tela inicial (Home) e o que aparece em
+// todas as telas (TopBar, Footer, ThemeToggle) entram no bundle inicial.
+// As demais telas, o player e o painel de conta viram chunks separados,
+// carregados sob demanda — reduz o JS baixado na primeira abertura. O tipo
+// PlayerMode é importado como `import type` acima, então não puxa o módulo
+// do PlayerHost para o bundle inicial.
+const Onboarding = lazy(() => import('./components/Onboarding'))
+const Catalog = lazy(() => import('./components/Catalog'))
+const Favorites = lazy(() => import('./components/Favorites'))
+const Playlist = lazy(() => import('./components/Playlist'))
+const History = lazy(() => import('./components/History'))
+const ShortsScreen = lazy(() => import('./components/ShortsScreen'))
+const PlayerHost = lazy(() => import('./components/PlayerHost'))
+const AccountPanel = lazy(() => import('./components/AccountPanel'))
+
+function ScreenFallback() {
+  return (
+    <p className="p-6 text-center text-sm text-neutral-500 dark:text-neutral-400">Carregando…</p>
+  )
+}
 
 type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts'
 
@@ -47,7 +61,11 @@ function App() {
   }, [])
 
   if (!onboardingDone) {
-    return <Onboarding onDone={() => setOnboardingDone(true)} />
+    return (
+      <Suspense fallback={<ScreenFallback />}>
+        <Onboarding onDone={() => setOnboardingDone(true)} />
+      </Suspense>
+    )
   }
 
   function handleSelect(video: Video, newQueue?: Video[]) {
@@ -100,26 +118,35 @@ function App() {
           responsável ajustar o limite nas configurações.
         </div>
       )}
+      {/* Home é eager; as demais telas são chunks lazy — a fallback só
+          aparece no primeiro acesso a cada aba, enquanto o chunk baixa. */}
       {view === 'home' && <Home onSelect={handleSelect} />}
-      {view === 'catalog' && <Catalog key={catalogVersion} onSelect={handleSelect} />}
-      {view === 'shorts' && <ShortsScreen key={catalogVersion} />}
-      {view === 'favorites' && <Favorites onSelect={handleSelect} />}
-      {view === 'playlist' && <Playlist onSelect={handleSelect} />}
-      {view === 'history' && <History onSelect={handleSelect} />}
+      <Suspense fallback={<ScreenFallback />}>
+        {view === 'catalog' && <Catalog key={catalogVersion} onSelect={handleSelect} />}
+        {view === 'shorts' && <ShortsScreen key={catalogVersion} />}
+        {view === 'favorites' && <Favorites onSelect={handleSelect} />}
+        {view === 'playlist' && <Playlist onSelect={handleSelect} />}
+        {view === 'history' && <History onSelect={handleSelect} />}
+      </Suspense>
       <Footer />
-      <AccountPanel onCatalogChanged={() => setCatalogVersion((v) => v + 1)} />
+      {/* Overlays: fallback nulo — não devem piscar um "Carregando…" sobre a tela. */}
+      <Suspense fallback={null}>
+        <AccountPanel onCatalogChanged={() => setCatalogVersion((v) => v + 1)} />
+      </Suspense>
       <ThemeToggle />
       {playing && (
-        <PlayerHost
-          video={playing}
-          mode={playerMode}
-          onModeChange={setPlayerMode}
-          onClose={handleClosePlayer}
-          onSelect={handleSelect}
-          onTimeUp={handleTimeUp}
-          queue={queue}
-          onQueueAdvance={handleQueueAdvance}
-        />
+        <Suspense fallback={null}>
+          <PlayerHost
+            video={playing}
+            mode={playerMode}
+            onModeChange={setPlayerMode}
+            onClose={handleClosePlayer}
+            onSelect={handleSelect}
+            onTimeUp={handleTimeUp}
+            queue={queue}
+            onQueueAdvance={handleQueueAdvance}
+          />
+        </Suspense>
       )}
     </div>
   )
