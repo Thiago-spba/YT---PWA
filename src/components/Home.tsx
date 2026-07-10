@@ -3,6 +3,7 @@ import type { Video } from '../types'
 import VideoCard from './VideoCard'
 import { getTopCategories, listCatalog, recordInterest, removeFromCatalog } from '../lib/db'
 import { categorize } from '../lib/categories'
+import { expandSearchTerm } from '../lib/aiSearch'
 import { extractVideoId, getVideoById, hasApiKey, searchVideos, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
@@ -278,12 +279,18 @@ export default function Home({ onSelect }: Props) {
         setInput('')
       } else if (hasApiKey()) {
         recordInterest(categorize(value)).catch(() => {})
+        // Busca inteligente (item 4): expande o termo em sinônimos via IA e
+        // combina tudo numa única consulta usando o operador OR da API do
+        // YouTube — assim "louvor" também encontra vídeos de "música gospel",
+        // sem gastar uma segunda requisição de busca.
+        const extraTerms = await expandSearchTerm(value)
+        const combinedQuery = extraTerms.length > 0 ? [value, ...extraTerms].join('|') : value
         searchSeenRef.current = new Set()
-        const page = await searchVideosPage(value)
+        const page = await searchVideosPage(combinedQuery)
         page.videos.forEach((v) => searchSeenRef.current.add(v.id))
         searchTokenRef.current = page.nextPageToken
         setSearchResults(page.videos)
-        setSearchQuery(value)
+        setSearchQuery(combinedQuery)
       } else {
         setSearchStatus(
           'Isso não parece um link do YouTube. Para buscar por texto, a busca precisa estar configurada.',
