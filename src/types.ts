@@ -13,3 +13,8 @@ export interface HistoryEntry extends Video {
 export interface CatalogEntry extends Video {
   addedAt: number
 }
+
+export interface PlaylistEntry extends Video {
+  position: number
+  addedAt: number
+}

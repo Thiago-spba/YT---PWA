@@ -1,8 +1,16 @@
-type View = 'catalog' | 'favorites' | 'history' | 'shorts'
+type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts'
 
 interface Props {
   view: View
   onChange: (view: View) => void
+}
+
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z" />
+    </svg>
+  )
 }
 
 function CatalogIcon() {
@@ -20,6 +28,15 @@ function FavoritesIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
       <path strokeLinejoin="round" d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5z" />
+    </svg>
+  )
+}
+
+function PlaylistIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path strokeLinecap="round" d="M4 6h12M4 12h12M4 18h7" />
+      <path d="M18 14l4 2.5-4 2.5z" fill="currentColor" stroke="none" />
     </svg>
   )
 }
@@ -43,9 +60,11 @@ function ShortsIcon() {
 }
 
 const items: { key: View; label: string; icon: () => React.JSX.Element }[] = [
-  { key: 'catalog', label: 'Catálogo', icon: CatalogIcon },
+  { key: 'home', label: 'Início', icon: HomeIcon },
+  { key: 'catalog', label: 'Meus Canais', icon: CatalogIcon },
   { key: 'shorts', label: 'Shorts', icon: ShortsIcon },
   { key: 'favorites', label: 'Favoritos', icon: FavoritesIcon },
+  { key: 'playlist', label: 'Playlist', icon: PlaylistIcon },
   { key: 'history', label: 'Histórico', icon: HistoryIcon },
 ]
 

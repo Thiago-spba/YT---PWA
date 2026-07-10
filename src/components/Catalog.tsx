@@ -186,7 +186,7 @@ export default function Catalog({ onSelect }: Props) {
       )}
 
       <section>
-        <h2 className="mb-2 text-lg font-semibold">Catálogo</h2>
+        <h2 className="mb-2 text-lg font-semibold">Meus Canais</h2>
         {catalog.length === 0 ? (
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
             Nenhum vídeo no catálogo ainda. Cole um link acima para começar.

@@ -325,7 +325,12 @@ export default function Shorts() {
               por causa do scroll-snap. */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="relative h-full max-h-full aspect-[9/16] max-w-full">
-              <div ref={playerContainerRef} className="pointer-events-auto h-full w-full" />
+              {/* pointer-events-none: sem isso, o player bloqueia o gesto de
+                  arrastar/rolar (o toque "morre" aqui em vez de chegar até
+                  a lista rolável por baixo). O player não precisa capturar
+                  toque — os controles (mudo/favoritar/setas) já são botões
+                  próprios com pointer-events-auto individual. */}
+              <div ref={playerContainerRef} className="pointer-events-none h-full w-full" />
 
               {activeVideo && (
                 <>

@@ -8,16 +8,18 @@ import {
 import type { Video } from './types'
 import Onboarding from './components/Onboarding'
 import TopBar from './components/TopBar'
+import Home from './components/Home'
 import Catalog from './components/Catalog'
 import Favorites from './components/Favorites'
+import Playlist from './components/Playlist'
 import History from './components/History'
 import Shorts from './components/Shorts'
-import Watch from './components/Watch'
+import PlayerHost, { type PlayerMode } from './components/PlayerHost'
 import Footer from './components/Footer'
 import AccountPanel from './components/AccountPanel'
 import ThemeToggle from './components/ThemeToggle'
 
-type View = 'catalog' | 'favorites' | 'history' | 'shorts'
+type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts'
 
 function limitReachedNow(): boolean {
   if (!isParentalControlEnabled()) return false
@@ -27,8 +29,10 @@ function limitReachedNow(): boolean {
 
 function App() {
   const [onboardingDone, setOnboardingDone] = useState(isOnboardingDone())
-  const [view, setView] = useState<View>('catalog')
+  const [view, setView] = useState<View>('home')
   const [playing, setPlaying] = useState<Video | null>(null)
+  const [playerMode, setPlayerMode] = useState<PlayerMode>('expanded')
+  const [queue, setQueue] = useState<Video[]>([])
   const [timeUp, setTimeUp] = useState(limitReachedNow())
   const [catalogVersion, setCatalogVersion] = useState(0)
 
@@ -36,21 +40,32 @@ function App() {
     return <Onboarding onDone={() => setOnboardingDone(true)} />
   }
 
-  function handleSelect(video: Video) {
+  function handleSelect(video: Video, newQueue?: Video[]) {
     if (limitReachedNow()) {
       setTimeUp(true)
       return
     }
     setPlaying(video)
+    setPlayerMode('expanded')
+    setQueue(newQueue ?? [])
+  }
+
+  function handleQueueAdvance() {
+    setQueue((q) => q.slice(1))
+  }
+
+  function handleClosePlayer() {
+    setPlaying(null)
+    setQueue([])
   }
 
   function handleTimeUp() {
-    setPlaying(null)
+    handleClosePlayer()
     setTimeUp(true)
   }
 
   function handleChangeView(next: View) {
-    setPlaying(null)
+    if (playing) setPlayerMode('mini')
     setView(next)
   }
 
@@ -63,24 +78,27 @@ function App() {
           responsável ajustar o limite nas configurações.
         </div>
       )}
-      {playing ? (
-        <Watch
-          video={playing}
-          onClose={() => setPlaying(null)}
-          onSelect={handleSelect}
-          onTimeUp={handleTimeUp}
-        />
-      ) : (
-        <>
-          {view === 'catalog' && <Catalog key={catalogVersion} onSelect={handleSelect} />}
-          {view === 'shorts' && <Shorts key={catalogVersion} />}
-          {view === 'favorites' && <Favorites onSelect={handleSelect} />}
-          {view === 'history' && <History onSelect={handleSelect} />}
-        </>
-      )}
+      {view === 'home' && <Home onSelect={handleSelect} />}
+      {view === 'catalog' && <Catalog key={catalogVersion} onSelect={handleSelect} />}
+      {view === 'shorts' && <Shorts key={catalogVersion} />}
+      {view === 'favorites' && <Favorites onSelect={handleSelect} />}
+      {view === 'playlist' && <Playlist onSelect={handleSelect} />}
+      {view === 'history' && <History onSelect={handleSelect} />}
       <Footer />
       <AccountPanel onCatalogChanged={() => setCatalogVersion((v) => v + 1)} />
       <ThemeToggle />
+      {playing && (
+        <PlayerHost
+          video={playing}
+          mode={playerMode}
+          onModeChange={setPlayerMode}
+          onClose={handleClosePlayer}
+          onSelect={handleSelect}
+          onTimeUp={handleTimeUp}
+          queue={queue}
+          onQueueAdvance={handleQueueAdvance}
+        />
+      )}
     </div>
   )
 }

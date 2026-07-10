@@ -60,6 +60,31 @@ export async function searchVideos(query: string): Promise<Video[]> {
   }))
 }
 
+/** Busca ordenada pelas mais recentes (upload), usada na aba Início. */
+export async function searchRecent(query: string, maxResults = 12): Promise<Video[]> {
+  const key = assertKey()
+  const params = new URLSearchParams({
+    key,
+    q: query,
+    part: 'snippet',
+    type: 'video',
+    maxResults: String(maxResults),
+    safeSearch: 'strict',
+    order: 'date',
+  })
+  const res = await fetch(`${BASE_URL}/search?${params}`)
+  if (!res.ok) {
+    throw new YoutubeApiError(`Busca falhou (${res.status})`)
+  }
+  const data = await res.json()
+  return data.items.map((item: any) => ({
+    id: item.id.videoId,
+    title: item.snippet.title,
+    channelTitle: item.snippet.channelTitle,
+    thumbnailUrl: resolveThumbnail(item.id.videoId, item.snippet.thumbnails),
+  }))
+}
+
 export interface SearchPage {
   videos: Video[]
   nextPageToken?: string
