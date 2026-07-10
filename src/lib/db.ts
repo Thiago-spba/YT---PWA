@@ -1,18 +1,19 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { CatalogEntry, HistoryEntry, PlaylistEntry, Video } from '../types'
+import type { CatalogEntry, HistoryEntry, InterestEntry, PlaylistEntry, Video } from '../types'
 
 interface YtPwaDB extends DBSchema {
   catalog: { key: string; value: CatalogEntry }
   favorites: { key: string; value: CatalogEntry }
   history: { key: string; value: HistoryEntry }
   playlist: { key: string; value: PlaylistEntry }
+  interests: { key: string; value: InterestEntry }
 }
 
 let dbPromise: Promise<IDBPDatabase<YtPwaDB>> | null = null
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<YtPwaDB>('yt-pwa', 2, {
+    dbPromise = openDB<YtPwaDB>('yt-pwa', 3, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           db.createObjectStore('catalog', { keyPath: 'id' })
@@ -21,6 +22,9 @@ function getDB() {
         }
         if (oldVersion < 2) {
           db.createObjectStore('playlist', { keyPath: 'id' })
+        }
+        if (oldVersion < 3) {
+          db.createObjectStore('interests', { keyPath: 'category' })
         }
       },
     })
@@ -158,4 +162,44 @@ export async function movePlaylistItem(id: string, direction: 'up' | 'down'): Pr
   await tx.store.put({ ...a, position: b.position })
   await tx.store.put({ ...b, position: a.position })
   await tx.done
+}
+
+// Meia-vida do interesse por categoria: sem isso, uma fase antiga (ex:
+// duas semanas assistindo muito de uma categoria) continuaria dominando
+// a Home pra sempre. A pontuação é recalculada só na leitura/escrita
+// (sem cron nem campo extra no modelo) — a cada 14 dias sem atividade
+// naquela categoria, o placar cai pela metade.
+const INTEREST_HALF_LIFE_MS = 14 * 24 * 60 * 60 * 1000
+
+function decayedScore(entry: InterestEntry, now: number): number {
+  const elapsedMs = now - entry.updatedAt
+  if (elapsedMs <= 0) return entry.score
+  return entry.score * Math.pow(0.5, elapsedMs / INTEREST_HALF_LIFE_MS)
+}
+
+/** Registra que o usuário buscou ou assistiu algo de cada categoria — usado pela recomendação da Home (sem IA). */
+export async function recordInterest(categories: string[], weight = 1): Promise<void> {
+  if (categories.length === 0) return
+  const db = await getDB()
+  const tx = db.transaction('interests', 'readwrite')
+  const now = Date.now()
+  for (const category of categories) {
+    const existing = await tx.store.get(category)
+    const currentScore = existing ? decayedScore(existing, now) : 0
+    await tx.store.put({ category, score: currentScore + weight, updatedAt: now })
+  }
+  await tx.done
+}
+
+/** As categorias com maior pontuação (já aplicando o decaimento por tempo), usadas para priorizar a Home. */
+export async function getTopCategories(limit = 5): Promise<string[]> {
+  const db = await getDB()
+  const all = await db.getAll('interests')
+  const now = Date.now()
+  return all
+    .map((entry) => ({ category: entry.category, score: decayedScore(entry, now) }))
+    .filter((entry) => entry.score > 0.05)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map((entry) => entry.category)
 }

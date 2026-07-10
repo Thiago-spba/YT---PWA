@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
 import VideoCard from './VideoCard'
-import { listCatalog, removeFromCatalog } from '../lib/db'
+import { getTopCategories, listCatalog, recordInterest, removeFromCatalog } from '../lib/db'
+import { categorize } from '../lib/categories'
 import { extractVideoId, getVideoById, hasApiKey, searchVideos, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
@@ -66,6 +67,11 @@ export default function Home({ onSelect }: Props) {
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+  // Categorias com maior pontuação de interesse (item 3, recomendação
+  // por histórico) — carregadas uma vez do IndexedDB e usadas para
+  // priorizar novos vídeos que entram no feed, sem precisar re-renderizar
+  // por causa disso (fica num ref, não em state).
+  const topCategoriesRef = useRef<string[]>([])
 
   // Busca inteligente (autocomplete + resultados) — antes ficava presa
   // dentro de "Meus Canais"; agora mora na Home, a tela principal.
@@ -93,6 +99,10 @@ export default function Home({ onSelect }: Props) {
       setLoading(false)
     })
 
+    getTopCategories(5).then((categories) => {
+      topCategoriesRef.current = categories
+    })
+
     if (!hasApiKey()) return
 
     if (cachedVideos && Date.now() - cachedAt < CACHE_TTL_MS) {
@@ -108,13 +118,24 @@ export default function Home({ onSelect }: Props) {
 
   // Embaralha de novo toda vez que a lista de vídeos disponíveis muda
   // — assim a ordem exibida muda a cada visita, mesmo quando o
-  // conteúdo em si ainda é o mesmo por causa do cache curto.
+  // conteúdo em si ainda é o mesmo por causa do cache curto. Dentro de
+  // cada leva nova, vídeos de categorias com maior pontuação de
+  // interesse (item 3) entram primeiro — sem reordenar o que já está
+  // na tela, só priorizando o que ainda vai ser exibido.
   useEffect(() => {
     setOrder((current) => {
       const all = [...catalogVideos, ...apiVideos]
       const known = new Set(current)
-      const fresh = all.filter((v) => !known.has(v.id)).map((v) => v.id)
-      return [...current, ...shuffle(fresh)]
+      const fresh = all.filter((v) => !known.has(v.id))
+      const top = topCategoriesRef.current
+      const prioritizedIds = new Set(
+        top.length > 0
+          ? fresh.filter((v) => categorize(`${v.title} ${v.channelTitle}`).some((c) => top.includes(c))).map((v) => v.id)
+          : [],
+      )
+      const prioritized = fresh.filter((v) => prioritizedIds.has(v.id)).map((v) => v.id)
+      const rest = fresh.filter((v) => !prioritizedIds.has(v.id)).map((v) => v.id)
+      return [...current, ...shuffle(prioritized), ...shuffle(rest)]
     })
   }, [catalogVideos, apiVideos])
 
@@ -256,6 +277,7 @@ export default function Home({ onSelect }: Props) {
         onSelect(video)
         setInput('')
       } else if (hasApiKey()) {
+        recordInterest(categorize(value)).catch(() => {})
         searchSeenRef.current = new Set()
         const page = await searchVideosPage(value)
         page.videos.forEach((v) => searchSeenRef.current.add(v.id))

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
-import { isFavorite, recordHistory, removeFromCatalog, toggleFavorite } from '../lib/db'
+import { isFavorite, recordHistory, recordInterest, removeFromCatalog, toggleFavorite } from '../lib/db'
+import { categorize } from '../lib/categories'
 import { hasApiKey, searchShortsPage, YoutubeApiError } from '../lib/youtube'
 import { loadYouTubeApi, type YTPlayer } from '../lib/youtubePlayer'
 import { useShortsFeed } from '../lib/useShortsFeed'
@@ -246,6 +247,7 @@ export default function Shorts({ startId, onBack }: Props) {
     const video = shorts.find((v) => v.id === activeId)
     if (!video) return
     recordHistory(video)
+    recordInterest(categorize(`${video.title} ${video.channelTitle}`), 2).catch(() => {})
     isFavorite(video.id).then(setFavorite)
 
     function load() {

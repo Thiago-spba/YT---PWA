@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
-import { isFavorite, listCatalog, recordHistory, toggleFavorite } from '../lib/db'
+import { isFavorite, listCatalog, recordHistory, recordInterest, toggleFavorite } from '../lib/db'
+import { categorize } from '../lib/categories'
 import {
   addUsageMinutes,
   getDailyLimitMinutes,
@@ -308,6 +309,7 @@ export default function PlayerHost({
   useEffect(() => {
     currentVideoIdRef.current = video.id
     recordHistory(video)
+    recordInterest(categorize(`${video.title} ${video.channelTitle}`), 2).catch(() => {})
     isFavorite(video.id).then(setFavorite)
     setVideoError(false)
 

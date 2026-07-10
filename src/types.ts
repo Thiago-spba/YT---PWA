@@ -19,3 +19,9 @@ export interface PlaylistEntry extends Video {
   position: number
   addedAt: number
 }
+
+export interface InterestEntry {
+  category: string
+  score: number
+  updatedAt: number
+}
