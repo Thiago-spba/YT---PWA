@@ -14,7 +14,7 @@ import Catalog from './components/Catalog'
 import Favorites from './components/Favorites'
 import Playlist from './components/Playlist'
 import History from './components/History'
-import Shorts from './components/Shorts'
+import ShortsScreen from './components/ShortsScreen'
 import PlayerHost, { type PlayerMode } from './components/PlayerHost'
 import Footer from './components/Footer'
 import AccountPanel from './components/AccountPanel'
@@ -102,7 +102,7 @@ function App() {
       )}
       {view === 'home' && <Home onSelect={handleSelect} />}
       {view === 'catalog' && <Catalog key={catalogVersion} onSelect={handleSelect} />}
-      {view === 'shorts' && <Shorts key={catalogVersion} />}
+      {view === 'shorts' && <ShortsScreen key={catalogVersion} />}
       {view === 'favorites' && <Favorites onSelect={handleSelect} />}
       {view === 'playlist' && <Playlist onSelect={handleSelect} />}
       {view === 'history' && <History onSelect={handleSelect} />}
