@@ -248,9 +248,11 @@ export default function Shorts({ startId, onBack }: Props) {
     if (!activeId) return
     const video = shorts.find((v) => v.id === activeId)
     if (!video) return
-    recordHistory(video)
+    recordHistory(video).catch(() => {})
     recordInterest(categorize(`${video.title} ${video.channelTitle}`), 2).catch(() => {})
-    isFavorite(video.id).then(setFavorite)
+    isFavorite(video.id)
+      .then(setFavorite)
+      .catch(() => {})
 
     function load() {
       playerRef.current?.loadVideoById(activeId!)

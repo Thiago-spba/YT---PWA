@@ -42,7 +42,12 @@ export function useShortsFeed(): ShortsFeed {
   const queryTurnRef = useRef(0)
 
   useEffect(() => {
-    listCatalog().then(async (all) => {
+    // `.catch(() => [])`: se o IndexedDB falhar (sem suporte, bloqueado),
+    // segue com catálogo vazio em vez de deixar `loaded` presa em false
+    // para sempre (tela de Shorts travada em "Carregando…").
+    listCatalog()
+      .catch(() => [])
+      .then(async (all) => {
       const onlyShorts = all.filter((v) => v.isShort)
       onlyShorts.forEach((v) => {
         catalogIdsRef.current.add(v.id)

@@ -6,6 +6,7 @@ const KEYS = {
   usageMinutes: 'yt-pwa:usage-minutes',
   parentalControlEnabled: 'yt-pwa:parental-control-enabled',
   autoplayEnabled: 'yt-pwa:autoplay-enabled',
+  keepScreenOnEnabled: 'yt-pwa:keep-screen-on-enabled',
 } as const
 
 /** Toca o próximo vídeo da lista automaticamente ao terminar. Ligado por padrão. */
@@ -28,6 +29,35 @@ export function setParentalControlEnabled(enabled: boolean): void {
   } else {
     localStorage.removeItem(KEYS.parentalControlEnabled)
   }
+}
+
+/**
+ * Mantém a tela acesa durante a reprodução (Screen Wake Lock). Desligado
+ * por padrão — gasta mais bateria, então é opt-in. Dispara um evento para
+ * o player (montado em outro componente) atualizar em tempo real, mesmo
+ * alternando pelo painel de configurações enquanto um vídeo já está
+ * tocando — mesmo padrão usado em `pwaUpdate.ts` para avisar a App sobre
+ * versão nova.
+ */
+export function isKeepScreenOnEnabled(): boolean {
+  try {
+    return localStorage.getItem(KEYS.keepScreenOnEnabled) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function setKeepScreenOnEnabled(enabled: boolean): void {
+  try {
+    if (enabled) {
+      localStorage.setItem(KEYS.keepScreenOnEnabled, '1')
+    } else {
+      localStorage.removeItem(KEYS.keepScreenOnEnabled)
+    }
+  } catch {
+    // localStorage indisponível (aba anônima/bloqueado) — segue sem persistir.
+  }
+  window.dispatchEvent(new Event('keep-screen-on-changed'))
 }
 
 export function isOnboardingDone(): boolean {

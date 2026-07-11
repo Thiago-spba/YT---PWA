@@ -6,6 +6,7 @@ import {
   addUsageMinutes,
   getDailyLimitMinutes,
   isAutoplayEnabled,
+  isKeepScreenOnEnabled,
   isParentalControlEnabled,
   setAutoplayEnabled,
 } from '../lib/storage'
@@ -19,6 +20,7 @@ import {
   type DocumentPipHandle,
   type YTPlayer,
 } from '../lib/youtubePlayer'
+import { useWakeLock } from '../lib/useWakeLock'
 import VideoCard from './VideoCard'
 
 function findNaturalNext(all: Video[], currentId: string, fallback: Video[]): Video | undefined {
@@ -130,6 +132,7 @@ export default function PlayerHost({
   const [nextPageToken, setNextPageToken] = useState<string | undefined>(undefined)
   const [loadingMore, setLoadingMore] = useState(false)
   const [autoplay, setAutoplay] = useState(isAutoplayEnabled())
+  const [keepScreenOn, setKeepScreenOn] = useState(isKeepScreenOnEnabled())
   const [pipActive, setPipActive] = useState(false)
   const [pipMessage, setPipMessage] = useState<string | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
@@ -151,6 +154,21 @@ export default function PlayerHost({
   useEffect(() => {
     autoplayRef.current = autoplay
   }, [autoplay])
+
+  // Ativa/desativa em tempo real se a preferência mudar no painel de
+  // configurações enquanto este player já está montado (mesmo padrão de
+  // evento usado em pwaUpdate.ts para avisar sobre versão nova).
+  useEffect(() => {
+    function handleKeepScreenOnChange() {
+      setKeepScreenOn(isKeepScreenOnEnabled())
+    }
+    window.addEventListener('keep-screen-on-changed', handleKeepScreenOnChange)
+    return () => window.removeEventListener('keep-screen-on-changed', handleKeepScreenOnChange)
+  }, [])
+
+  // Só mantém a tela acesa enquanto este player existir (vídeo aberto,
+  // mini ou expandido) — evita gastar bateria fora da reprodução.
+  useWakeLock(keepScreenOn)
 
   useEffect(() => {
     onSelectRef.current = onSelect
@@ -308,15 +326,19 @@ export default function PlayerHost({
 
   useEffect(() => {
     currentVideoIdRef.current = video.id
-    recordHistory(video)
+    recordHistory(video).catch(() => {})
     recordInterest(categorize(`${video.title} ${video.channelTitle}`), 2).catch(() => {})
-    isFavorite(video.id).then(setFavorite)
+    isFavorite(video.id)
+      .then(setFavorite)
+      .catch(() => {})
     setVideoError(false)
 
-    listCatalog().then((all) => {
-      catalogAllRef.current = all
-      setCatalogFeed(all.filter((v) => v.id !== video.id))
-    })
+    listCatalog()
+      .catch(() => [])
+      .then((all) => {
+        catalogAllRef.current = all
+        setCatalogFeed(all.filter((v) => v.id !== video.id))
+      })
 
     setSuggested([])
     setNextPageToken(undefined)

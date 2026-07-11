@@ -145,6 +145,40 @@ export async function getVideoById(id: string): Promise<Video | null> {
 }
 
 /**
+ * Busca metadados completos de até 50 vídeos por chamada via endpoint
+ * `videos` (custo 1 de cota, contra 100 do `search`) — usado para montar a
+ * primeira página da Home a partir de uma lista curada de IDs
+ * (`src/config/recommendedVideos.ts`) sem gastar cota de busca. Vídeos não
+ * encontrados ou com reprodução bloqueada fora do YouTube são omitidos em
+ * silêncio (a lista pode ficar mais curta, mas nunca quebra).
+ */
+export async function getVideosByIds(ids: string[]): Promise<Video[]> {
+  if (ids.length === 0) return []
+  const videos: Video[] = []
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50)
+    try {
+      const data = await fetchYoutube('videos', { id: batch.join(','), part: 'snippet,contentDetails,status' })
+      for (const item of data.items ?? []) {
+        if (item.status?.embeddable === false) continue
+        const seconds = item.contentDetails?.duration ? parseIsoDuration(item.contentDetails.duration) : null
+        videos.push({
+          id: item.id,
+          title: item.snippet.title,
+          channelTitle: item.snippet.channelTitle,
+          thumbnailUrl: resolveThumbnail(item.id, item.snippet.thumbnails),
+          isShort: seconds !== null ? seconds > 0 && seconds <= SHORT_MAX_SECONDS : undefined,
+          durationSeconds: seconds ?? undefined,
+        })
+      }
+    } catch {
+      continue
+    }
+  }
+  return videos
+}
+
+/**
  * Busca vídeos e devolve só os que são Shorts de verdade (≤60s) e
  * incorporáveis. Usa `videoDuration=short` (filtro grosso da API, até
  * 4 min) e depois confirma a duração exata via `getVideoFlags`. Aceita

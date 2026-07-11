@@ -13,6 +13,10 @@ let dbPromise: Promise<IDBPDatabase<YtPwaDB>> | null = null
 
 function getDB() {
   if (!dbPromise) {
+    // Se abrir o banco falhar (ex.: aba anônima sem suporte a IndexedDB,
+    // InvalidStateError), não guarda a promise rejeitada — assim a próxima
+    // chamada tenta abrir de novo em vez de falhar para sempre com o
+    // mesmo erro cacheado.
     dbPromise = openDB<YtPwaDB>('yt-pwa', 3, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
@@ -27,6 +31,9 @@ function getDB() {
           db.createObjectStore('interests', { keyPath: 'category' })
         }
       },
+    }).catch((err) => {
+      dbPromise = null
+      throw err
     })
   }
   return dbPromise

@@ -5,9 +5,10 @@ import { getTopCategories, listCatalog, listHistory, recordInterest, removeFromC
 import { categorize } from '../lib/categories'
 import { expandSearchTerm } from '../lib/aiSearch'
 import { getSuggestions } from '../lib/searchSuggest'
-import { extractVideoId, getVideoById, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
+import { extractVideoId, getVideoById, getVideosByIds, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { QUOTA_EXCEEDED_MESSAGE } from '../lib/youtubeCache'
 import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
+import { RECOMMENDED_VIDEO_IDS } from '../config/recommendedVideos'
 
 interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
@@ -99,20 +100,28 @@ export default function Home({ onSelect }: Props) {
   useEffect(() => {
     // O catálogo salvo é local e sempre disponível — mostra na hora,
     // garantindo que a Home nunca fique vazia, mesmo se a busca da API
-    // falhar (limite de requisições, sem internet etc).
-    listCatalog().then((videos) => {
-      setCatalogVideos(videos)
-      videos.forEach((v) => seenIdsRef.current.add(v.id))
-      setLoading(false)
-    })
+    // falhar (limite de requisições, sem internet etc). `.catch()` aqui
+    // garante que uma falha do IndexedDB (ex.: aba anônima sem suporte)
+    // não deixe a tela presa em "Carregando…" para sempre.
+    listCatalog()
+      .catch(() => [])
+      .then((videos) => {
+        setCatalogVideos(videos)
+        videos.forEach((v) => seenIdsRef.current.add(v.id))
+        setLoading(false)
+      })
 
-    getTopCategories(5).then((categories) => {
-      topCategoriesRef.current = categories
-    })
+    getTopCategories(5)
+      .catch(() => [])
+      .then((categories) => {
+        topCategoriesRef.current = categories
+      })
 
-    listHistory().then((h) => {
-      historyRef.current = h
-    })
+    listHistory()
+      .catch(() => [])
+      .then((h) => {
+        historyRef.current = h
+      })
 
     if (!hasApiKey()) return
 
@@ -150,12 +159,28 @@ export default function Home({ onSelect }: Props) {
     })
   }, [catalogVideos, apiVideos])
 
-  // Só a primeira consulta ao carregar — buscar as 3 de uma vez é
-  // muita requisição junta, exatamente o tipo de rajada que derruba a
-  // API com erro 429. As outras 2 entram aos poucos, conforme rola
-  // (loadMore) ou quando a pessoa toca "Atualizar" de novo.
+  // Abordagem híbrida (custo de cota): a primeira página tenta a lista
+  // curada em `recommendedVideos.ts` via endpoint `videos` (custo 1) —
+  // só cai para busca por texto (`search`, custo 100) se a lista estiver
+  // vazia ou não devolver nenhum vídeo válido. As páginas seguintes
+  // (loadMore, abaixo) sempre usam busca por texto com paginação — a API
+  // não tem "próxima página" para uma lista fixa de IDs.
   async function fetchInitial(): Promise<Video[] | null> {
     try {
+      if (RECOMMENDED_VIDEO_IDS.length > 0) {
+        const recommended = await getVideosByIds(RECOMMENDED_VIDEO_IDS)
+        if (recommended.length > 0) {
+          recommended.forEach((v) => seenIdsRef.current.add(v.id))
+          cachedVideos = recommended
+          cachedAt = Date.now()
+          return recommended
+        }
+      }
+      // Só a primeira consulta por texto ao carregar — buscar as 3 de
+      // uma vez é muita requisição junta, exatamente o tipo de rajada
+      // que derruba a API com erro 429. As outras 2 entram aos poucos,
+      // conforme rola (loadMore) ou quando a pessoa toca "Atualizar" de
+      // novo.
       const q = QUERIES[0]
       const page = await searchVideosPage(q, undefined, 'date')
       pageTokensRef.current[q] = page.nextPageToken
@@ -396,9 +421,11 @@ export default function Home({ onSelect }: Props) {
               setShowSuggestions(true)
               // Revalida o histórico ao focar — cobre vídeos assistidos
               // depois que a Home montou, sem consultar o banco por tecla.
-              listHistory().then((h) => {
-                historyRef.current = h
-              })
+              listHistory()
+                .catch(() => [])
+                .then((h) => {
+                  historyRef.current = h
+                })
             }}
             placeholder={
               hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'

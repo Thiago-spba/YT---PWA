@@ -21,12 +21,15 @@ import type { Video } from '../types'
 import {
   getDailyLimitMinutes,
   hasPin,
+  isKeepScreenOnEnabled,
   isParentalControlEnabled,
   setDailyLimitMinutes,
+  setKeepScreenOnEnabled,
   setParentalControlEnabled,
   setPin,
   verifyPin,
 } from '../lib/storage'
+import { isWakeLockSupported } from '../lib/useWakeLock'
 
 interface Props {
   onCatalogChanged: () => void
@@ -36,6 +39,7 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
   const [open, setOpen] = useState(false)
   const [pinExists, setPinExists] = useState(false)
   const [parentalEnabled, setParentalEnabled] = useState(isParentalControlEnabled())
+  const [keepScreenOn, setKeepScreenOn] = useState(isKeepScreenOnEnabled())
   const [unlocked, setUnlocked] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [newPinInput, setNewPinInput] = useState('')
@@ -109,6 +113,12 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     const minutes = limit.trim() === '' ? null : Number(limit)
     setDailyLimitMinutes(minutes && minutes > 0 ? minutes : null)
     setMessage('Limite salvo.')
+  }
+
+  function handleToggleKeepScreenOn() {
+    const next = !keepScreenOn
+    setKeepScreenOn(next)
+    setKeepScreenOnEnabled(next)
   }
 
   async function handleConnectGoogle() {
@@ -453,6 +463,38 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
                         <p className="text-sm text-green-600">{importStatus}</p>
                       )}
                     </div>
+                  )}
+                </section>
+
+                <section className="border-t border-neutral-200 pt-4 dark:border-neutral-700">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+                        Manter tela acesa
+                      </h2>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        Evita que a tela apague durante a reprodução. Gasta mais bateria.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleToggleKeepScreenOn}
+                      aria-label="Manter tela acesa durante a reprodução"
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                        keepScreenOn ? 'bg-violet-600' : 'bg-neutral-300 dark:bg-neutral-700'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+                          keepScreenOn ? 'left-5' : 'left-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  {keepScreenOn && !isWakeLockSupported() && (
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      Este navegador não suporta manter a tela acesa automaticamente.
+                    </p>
                   )}
                 </section>
 
