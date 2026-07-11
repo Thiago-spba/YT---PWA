@@ -1,20 +1,10 @@
 import { resolveThumbnail } from './thumbnail'
 import type { Video } from '../types'
-
-const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY as string | undefined
-const BASE_URL = 'https://www.googleapis.com/youtube/v3'
+import { isQuotaExceeded, markQuotaExceeded, readYoutubeCache, writeYoutubeCache, QUOTA_EXCEEDED_MESSAGE } from './youtubeCache'
 
 export class YoutubeApiError extends Error {}
 export class NotEmbeddableError extends YoutubeApiError {}
-
-function assertKey(): string {
-  if (!API_KEY) {
-    throw new YoutubeApiError(
-      'Chave da YouTube Data API não configurada. Defina VITE_YOUTUBE_API_KEY no arquivo .env.',
-    )
-  }
-  return API_KEY
-}
+export class QuotaExceededError extends YoutubeApiError {}
 
 /**
  * 429 e 403 são erros de limite do Google, não bugs do app — mas com
@@ -26,6 +16,38 @@ function apiErrorMessage(action: 'Busca' | 'Consulta', status: number): string {
   if (status === 429) return `${action} falhou: muitas buscas em pouco tempo. Aguarde alguns minutos e tente de novo.`
   if (status === 403) return `${action} falhou: cota diária da busca esgotada. Volta a funcionar amanhã.`
   return `${action} falhou (${status})`
+}
+
+/**
+ * Único ponto de acesso à Vercel Function /api/youtube (a chave real vive
+ * só lá, no servidor). Antes de qualquer requisição de rede: 1) tenta o
+ * cache local (24h) — resultado idêntico não gasta cota de novo; 2) se a
+ * cota já foi dada como esgotada nesta sessão, nem tenta a rede. Ao
+ * receber 429/403 do proxy, marca a cota como esgotada para o resto da
+ * sessão (aba atual), evitando uma rajada de chamadas automáticas contra
+ * um limite que já sabemos estar bloqueado.
+ */
+async function fetchYoutube(endpoint: 'search' | 'videos', params: Record<string, string>): Promise<any> {
+  const query = new URLSearchParams({ endpoint, ...params })
+  const cacheKey = query.toString()
+
+  const cached = readYoutubeCache<unknown>(cacheKey)
+  if (cached) return cached
+
+  if (isQuotaExceeded()) {
+    throw new QuotaExceededError(QUOTA_EXCEEDED_MESSAGE)
+  }
+
+  const res = await fetch(`/api/youtube?${query}`)
+  if (res.status === 429 || res.status === 403) {
+    markQuotaExceeded()
+  }
+  if (!res.ok) {
+    throw new YoutubeApiError(apiErrorMessage(endpoint === 'search' ? 'Busca' : 'Consulta', res.status))
+  }
+  const data = await res.json()
+  writeYoutubeCache(cacheKey, data)
+  return data
 }
 
 export function extractVideoId(input: string): string | null {
@@ -50,20 +72,13 @@ export function extractVideoId(input: string): string | null {
 }
 
 export async function searchVideos(query: string): Promise<Video[]> {
-  const key = assertKey()
-  const params = new URLSearchParams({
-    key,
+  const data = await fetchYoutube('search', {
     q: query,
     part: 'snippet',
     type: 'video',
     maxResults: '12',
     safeSearch: 'strict',
   })
-  const res = await fetch(`${BASE_URL}/search?${params}`)
-  if (!res.ok) {
-    throw new YoutubeApiError(apiErrorMessage('Busca', res.status))
-  }
-  const data = await res.json()
   return data.items.map((item: any) => ({
     id: item.id.videoId,
     title: item.snippet.title,
@@ -78,22 +93,16 @@ export interface SearchPage {
 }
 
 export async function searchVideosPage(query: string, pageToken?: string, order?: 'date'): Promise<SearchPage> {
-  const key = assertKey()
-  const params = new URLSearchParams({
-    key,
+  const params: Record<string, string> = {
     q: query,
     part: 'snippet',
     type: 'video',
     maxResults: '12',
     safeSearch: 'strict',
-  })
-  if (pageToken) params.set('pageToken', pageToken)
-  if (order) params.set('order', order)
-  const res = await fetch(`${BASE_URL}/search?${params}`)
-  if (!res.ok) {
-    throw new YoutubeApiError(apiErrorMessage('Busca', res.status))
   }
-  const data = await res.json()
+  if (pageToken) params.pageToken = pageToken
+  if (order) params.order = order
+  const data = await fetchYoutube('search', params)
   return {
     videos: data.items.map((item: any) => ({
       id: item.id.videoId,
@@ -116,13 +125,7 @@ export function parseIsoDuration(iso: string): number {
 const SHORT_MAX_SECONDS = 60
 
 export async function getVideoById(id: string): Promise<Video | null> {
-  const key = assertKey()
-  const params = new URLSearchParams({ key, id, part: 'snippet,contentDetails,status' })
-  const res = await fetch(`${BASE_URL}/videos?${params}`)
-  if (!res.ok) {
-    throw new YoutubeApiError(apiErrorMessage('Consulta', res.status))
-  }
-  const data = await res.json()
+  const data = await fetchYoutube('videos', { id, part: 'snippet,contentDetails,status' })
   const item = data.items?.[0]
   if (!item) return null
   if (item.status?.embeddable === false) {
@@ -148,22 +151,16 @@ export async function getVideoById(id: string): Promise<Video | null> {
  * `pageToken` para rolagem infinita (mesmo padrão de `searchVideosPage`).
  */
 export async function searchShortsPage(query: string, pageToken?: string): Promise<SearchPage> {
-  const key = assertKey()
-  const params = new URLSearchParams({
-    key,
+  const params: Record<string, string> = {
     q: query,
     part: 'snippet',
     type: 'video',
     maxResults: '24',
     safeSearch: 'strict',
     videoDuration: 'short',
-  })
-  if (pageToken) params.set('pageToken', pageToken)
-  const res = await fetch(`${BASE_URL}/search?${params}`)
-  if (!res.ok) {
-    throw new YoutubeApiError(apiErrorMessage('Busca', res.status))
   }
-  const data = await res.json()
+  if (pageToken) params.pageToken = pageToken
+  const data = await fetchYoutube('search', params)
   const candidates: Video[] = data.items.map((item: any) => ({
     id: item.id.videoId,
     title: item.snippet.title,
@@ -190,26 +187,32 @@ export interface VideoFlags {
 /** Busca duração e permissão de incorporação de até 50 vídeos de uma vez. */
 export async function getVideoFlags(ids: string[]): Promise<Record<string, VideoFlags>> {
   if (ids.length === 0) return {}
-  const key = assertKey()
   const flags: Record<string, VideoFlags> = {}
   for (let i = 0; i < ids.length; i += 50) {
     const batch = ids.slice(i, i + 50)
-    const params = new URLSearchParams({ key, id: batch.join(','), part: 'contentDetails,status' })
-    const res = await fetch(`${BASE_URL}/videos?${params}`)
-    if (!res.ok) continue
-    const data = await res.json()
-    for (const item of data.items ?? []) {
-      const seconds = parseIsoDuration(item.contentDetails.duration)
-      flags[item.id] = {
-        isShort: seconds > 0 && seconds <= SHORT_MAX_SECONDS,
-        embeddable: item.status?.embeddable !== false,
-        durationSeconds: seconds,
+    try {
+      const data = await fetchYoutube('videos', { id: batch.join(','), part: 'contentDetails,status' })
+      for (const item of data.items ?? []) {
+        const seconds = parseIsoDuration(item.contentDetails.duration)
+        flags[item.id] = {
+          isShort: seconds > 0 && seconds <= SHORT_MAX_SECONDS,
+          embeddable: item.status?.embeddable !== false,
+          durationSeconds: seconds,
+        }
       }
+    } catch {
+      continue
     }
   }
   return flags
 }
 
+/**
+ * A chave da YouTube Data API agora vive só no servidor (api/youtube.ts),
+ * nunca no cliente — então não há mais "chave ausente" do ponto de vista
+ * do navegador. Mantida para não obrigar os componentes que já checam
+ * `hasApiKey()` a mudar de forma.
+ */
 export function hasApiKey(): boolean {
-  return Boolean(API_KEY)
+  return true
 }

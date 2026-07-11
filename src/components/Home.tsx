@@ -6,6 +6,7 @@ import { categorize } from '../lib/categories'
 import { expandSearchTerm } from '../lib/aiSearch'
 import { getSuggestions } from '../lib/searchSuggest'
 import { extractVideoId, getVideoById, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
+import { QUOTA_EXCEEDED_MESSAGE } from '../lib/youtubeCache'
 import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
 interface Props {
@@ -504,8 +505,18 @@ export default function Home({ onSelect }: Props) {
       {loading && videos.length === 0 && (
         <p className="text-sm text-neutral-500 dark:text-neutral-400">Carregando…</p>
       )}
-      {error && videos.length === 0 && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {!loading && videos.length === 0 && (
+      {error && videos.length === 0 && (
+        <p
+          className={
+            error === QUOTA_EXCEEDED_MESSAGE
+              ? 'text-sm text-neutral-500 dark:text-neutral-400'
+              : 'text-sm text-red-600 dark:text-red-400'
+          }
+        >
+          {error}
+        </p>
+      )}
+      {!loading && !error && videos.length === 0 && (
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
           Nenhum vídeo por aqui ainda. Busque acima ou adicione vídeos em "Meus Canais" para começar.
         </p>

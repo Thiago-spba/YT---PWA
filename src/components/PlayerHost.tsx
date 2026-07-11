@@ -181,7 +181,7 @@ export default function PlayerHost({
         host: 'https://www.youtube-nocookie.com',
         width: '100%',
         height: '100%',
-        playerVars: { rel: 0, autoplay: 1, modestbranding: 1 },
+        playerVars: { rel: 0, autoplay: 1, modestbranding: 1, origin: window.location.origin },
         events: {
           onReady: () => {
             readyRef.current = true
