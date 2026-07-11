@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>YT PWA — Guia de segurança das chaves de API</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1f2430;
+    font-size: 11.5pt;
+    line-height: 1.5;
+    margin: 0;
+  }
+  h1 {
+    font-size: 21pt;
+    color: #5b21b6;
+    margin: 0 0 2px;
+  }
+  .sub { color: #6b7280; font-size: 10pt; margin: 0 0 18px; }
+  h2 {
+    font-size: 13.5pt;
+    color: #5b21b6;
+    border-bottom: 2px solid #ede9fe;
+    padding-bottom: 4px;
+    margin: 22px 0 8px;
+  }
+  h3 { font-size: 11.5pt; margin: 14px 0 4px; color: #111827; }
+  p { margin: 6px 0; }
+  code {
+    background: #f3f4f6;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: "Consolas", monospace;
+    font-size: 9.8pt;
+    color: #9333ea;
+  }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  .box {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    background: #fafafa;
+  }
+  .ok { border-left: 4px solid #16a34a; background: #f0fdf4; }
+  .warn { border-left: 4px solid #d97706; background: #fffbeb; }
+  .danger { border-left: 4px solid #dc2626; background: #fef2f2; }
+  .tag { font-weight: 700; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 10pt; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #f5f3ff; color: #5b21b6; }
+  .check { list-style: none; padding-left: 0; }
+  .check li { padding-left: 26px; position: relative; }
+  .check li::before {
+    content: "☐"; position: absolute; left: 0; font-size: 13pt; color: #7c3aed;
+  }
+  footer {
+    margin-top: 26px; border-top: 1px solid #e5e7eb; padding-top: 8px;
+    color: #9ca3af; font-size: 8.5pt;
+  }
+  .keep-together { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<h1>Segurança das chaves de API — YT PWA</h1>
+<p class="sub">Guia para proteger as chaves usadas pelo app · Repositório: github.com/Thiago-spba/YT---PWA</p>
+
+<h2>1. O contexto (por que isto importa)</h2>
+<p>
+  O YT PWA não tem backend próprio: o navegador fala direto com a API do YouTube.
+  Toda variável de ambiente com prefixo <code>VITE_</code> é <strong>embutida no
+  bundle JavaScript</strong> durante o build — ou seja, fica visível para qualquer
+  pessoa que abra o site publicado e inspecione o código. Isso não é um bug; é como
+  apps sem backend funcionam. O que muda a segurança é <em>onde</em> a chave está e
+  <em>se</em> há restrições do lado do provedor.
+</p>
+
+<div class="box ok">
+  <p class="tag">✅ O que já está seguro (verificado)</p>
+  <ul>
+    <li><strong>ANTHROPIC_API_KEY</strong>: usada só no servidor (Vercel Function
+      <code>api/search-expand.ts</code>, via <code>process.env</code>). Nunca tem
+      prefixo <code>VITE_</code>, nunca vai para o frontend.</li>
+    <li>O arquivo <code>.env</code> (com as chaves reais) está no <code>.gitignore</code>
+      e <strong>nunca</strong> foi versionado — confirmado no histórico completo do Git.</li>
+    <li>Só o <code>.env.example</code> (placeholders vazios) está no repositório.</li>
+    <li>Nenhuma chave hardcoded no código-fonte.</li>
+  </ul>
+</div>
+
+<div class="box danger">
+  <p class="tag">⚠️ O risco em aberto</p>
+  <p>
+    <code>VITE_YOUTUBE_API_KEY</code> e <code>VITE_GOOGLE_CLIENT_ID</code> ficam
+    <strong>expostas no frontend</strong>. Sem restrições no Google, um terceiro pode
+    copiar a chave do YouTube e <strong>queimar sua cota diária</strong>. O Client ID
+    do OAuth é público por design, mas as origens autorizadas precisam estar travadas.
+  </p>
+  <p>
+    <strong>Não é possível travar isso por código no frontend</strong> — a chave está
+    em texto claro no navegador. A proteção só existe de duas formas, descritas abaixo.
+  </p>
+</div>
+
+<h2>2. Caminho 1 — Restringir no Google Cloud Console (recomendado; ~5 min, sem código)</h2>
+<p>
+  É o caminho oficial e mais rápido. A chave continua no frontend, mas fica
+  <strong>inútil fora do seu domínio</strong>.
+</p>
+
+<h3>2.1 Chave da YouTube Data API</h3>
+<ol>
+  <li>Acesse <code>console.cloud.google.com</code> → <strong>APIs e Serviços</strong>
+    → <strong>Credenciais</strong>.</li>
+  <li>Clique na sua <strong>Chave de API</strong> do YouTube.</li>
+  <li>Em <strong>Restrições de aplicativo</strong>, escolha
+    <strong>Referenciadores HTTP (sites)</strong> e adicione:
+    <ul>
+      <li><code>https://SEU-DOMINIO.vercel.app/*</code> (o domínio de produção)</li>
+      <li><code>http://localhost:*</code> e <code>http://127.0.0.1:*</code> (para testes locais)</li>
+    </ul>
+  </li>
+  <li>Em <strong>Restrições de API</strong>, marque
+    <strong>Restringir chave</strong> e selecione só <strong>YouTube Data API v3</strong>.</li>
+  <li>Salvar. (A propagação pode levar alguns minutos.)</li>
+</ol>
+
+<h3>2.2 Client ID do OAuth (login Google)</h3>
+<ol>
+  <li>Em <strong>Credenciais</strong>, abra o <strong>ID do cliente OAuth 2.0</strong>
+    (tipo "Aplicativo da Web").</li>
+  <li>Em <strong>Origens JavaScript autorizadas</strong>, deixe só:
+    <ul>
+      <li><code>https://SEU-DOMINIO.vercel.app</code></li>
+      <li><code>http://localhost:5173</code> (porta do Vite em dev, se usar)</li>
+    </ul>
+  </li>
+  <li>Salvar.</li>
+</ol>
+
+<div class="box warn keep-together">
+  <p class="tag">⚠️ Se a chave já ficou exposta sem restrição</p>
+  <p>
+    Como o repositório é público e o app pode já ter sido publicado, o mais seguro é
+    <strong>gerar uma chave nova</strong> no Google Cloud e criá-la <em>já</em> com as
+    restrições acima; depois apague a antiga. Atualize <code>VITE_YOUTUBE_API_KEY</code>
+    no <code>.env</code> local e nas variáveis de ambiente da Vercel.
+  </p>
+</div>
+
+<h2>3. Caminho 2 — Tirar a chave do frontend via proxy (opcional; mais seguro)</h2>
+<p>
+  Feito <strong>dentro da aplicação</strong>: mover as chamadas ao YouTube para uma
+  <strong>Vercel Function</strong>, exatamente como a Anthropic já funciona hoje. A
+  chave vira <code>YOUTUBE_API_KEY</code> (sem <code>VITE_</code>), fica só no servidor,
+  e o frontend chama <code>/api/youtube-...</code> em vez de <code>googleapis.com</code>
+  direto. Assim a chave <strong>nunca aparece no bundle</strong>.
+</p>
+
+<table class="keep-together">
+  <tr><th>Passo</th><th>O que fazer</th></tr>
+  <tr>
+    <td>Nova Function</td>
+    <td>Criar <code>api/youtube.ts</code> que recebe a busca, lê
+      <code>process.env.YOUTUBE_API_KEY</code> e repassa a resposta do YouTube.</td>
+  </tr>
+  <tr>
+    <td>Refatorar cliente</td>
+    <td>Em <code>src/lib/youtube.ts</code>, trocar as chamadas diretas
+      (<code>searchVideos</code>, <code>searchVideosPage</code>, <code>getVideoById</code>,
+      <code>getVideoFlags</code>, Shorts) por <code>fetch('/api/youtube?...')</code>.</td>
+  </tr>
+  <tr>
+    <td>Variáveis</td>
+    <td>Renomear <code>VITE_YOUTUBE_API_KEY</code> → <code>YOUTUBE_API_KEY</code> no
+      <code>.env</code> e no painel da Vercel. Manter <code>VITE_GOOGLE_CLIENT_ID</code>
+      (Client ID é público por natureza).</td>
+  </tr>
+  <tr>
+    <td>Rate limit</td>
+    <td>Reaproveitar o padrão de limite por IP já usado em
+      <code>api/search-expand.ts</code>.</td>
+  </tr>
+</table>
+<p>
+  Custo: é uma mudança de arquitetura (não trivial), mas o app já tem o padrão pronto.
+  <strong>Mesmo com o proxy, mantenha o Caminho 1</strong> como camada extra.
+</p>
+
+<h2>4. Checklist rápido</h2>
+<ul class="check">
+  <li>Restringir a chave do YouTube por referenciador HTTP + só YouTube Data API v3</li>
+  <li>Travar as origens JavaScript autorizadas do Client ID OAuth</li>
+  <li>Gerar chave nova do YouTube (se a antiga já ficou exposta) e apagar a antiga</li>
+  <li>Conferir que <code>.env</code> continua fora do Git (nunca commitar)</li>
+  <li>(Opcional/futuro) Implementar o proxy da API do YouTube via Vercel Function</li>
+  <li>(Opcional) Tornar o repositório privado no GitHub</li>
+</ul>
+
+<footer>
+  Documento gerado para o projeto YT PWA · Guarde junto ao repositório · Sem chaves reais neste arquivo.
+</footer>
+
+</body>
+</html>
