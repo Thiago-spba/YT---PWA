@@ -7,6 +7,15 @@ export interface YTPlayer {
   playVideo: () => void
   pauseVideo: () => void
   getIframe: () => HTMLIFrameElement
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void
+  getCurrentTime: () => number
+  getDuration: () => number
+  getVideoLoadedFraction: () => number
+  getVolume: () => number
+  setVolume: (volume: number) => void
+  setPlaybackRate: (rate: number) => void
+  getPlaybackRate: () => number
+  getPlayerState: () => number
 }
 
 /**
@@ -90,9 +99,9 @@ interface YTPlayerOptions {
   height?: string | number
   playerVars?: Record<string, number | string>
   events?: {
-    onReady?: () => void
+    onReady?: (event: { target: YTPlayer }) => void
     onError?: (event: { data: number }) => void
-    onStateChange?: (event: { data: number }) => void
+    onStateChange?: (event: { data: number; target: YTPlayer }) => void
   }
 }
 
