@@ -25,3 +25,18 @@ export interface InterestEntry {
   score: number
   updatedAt: number
 }
+
+/** Progresso de vídeo salvo no Firestore (users/{userId}/videoProgress/{videoId}) */
+export interface VideoProgress {
+  videoId: string
+  userId: string
+  currentTime: number
+  duration: number
+  updatedAt: number
+  completed: boolean
+}
+
+/** Documento bruto vindo do Firestore (com Timestamp) */
+export interface VideoProgressDoc extends Omit<VideoProgress, 'updatedAt'> {
+  updatedAt: Date | { toDate: () => Date } | number
+}
