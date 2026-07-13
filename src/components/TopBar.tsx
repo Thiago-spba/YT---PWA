@@ -70,7 +70,7 @@ const items: { key: View; label: string; icon: () => React.JSX.Element }[] = [
 
 export default function TopBar({ view, onChange }: Props) {
   return (
-    <header className="sticky top-0 z-50 flex flex-wrap items-center gap-1 border-b border-neutral-200 bg-white p-2 dark:border-neutral-700 dark:bg-neutral-900">
+    <header className="sticky top-0 z-50 flex flex-wrap items-center gap-1 border-b border-neutral-200 bg-white/80 backdrop-blur-sm p-2 dark:border-neutral-700 dark:bg-neutral-900/80">
       <span className="mr-3 pl-2 text-lg font-bold text-violet-700 dark:text-violet-300">
         YT
       </span>
@@ -99,3 +99,4 @@ export default function TopBar({ view, onChange }: Props) {
     </header>
   )
 }
+
