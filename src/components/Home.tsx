@@ -431,7 +431,7 @@ export default function Home({ onSelect }: Props) {
               hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
             }
             autoComplete="off"
-            className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800"
+            className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-900 placeholder-neutral-500 shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder-neutral-400"
           />
           <button
             type="submit"
