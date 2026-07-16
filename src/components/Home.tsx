@@ -100,12 +100,12 @@ export default function Home({ onSelect }: Props) {
   useEffect(() => {
     // O catálogo salvo é local e sempre disponível
     listCatalog()
-      .catch(() => [])
-      .then((videos) => {
-        setCatalogVideos(videos)
-        videos.forEach((v) => seenIdsRef.current.add(v.id))
-        setLoading(false)
-      })
+          .catch(() => [])
+          .then((videos) => {
+            setCatalogVideos(videos)
+            videos.forEach((v) => seenIdsRef.current.add(v.id))
+            setLoading(false)
+          })
 
     getTopCategories(5)
       .catch(() => [])
