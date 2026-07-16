@@ -7,8 +7,8 @@ import { expandSearchTerm } from '../lib/aiSearch'
 import { getSuggestions } from '../lib/searchSuggest'
 import { extractVideoId, getVideoById, getVideosByIds, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { QUOTA_EXCEEDED_MESSAGE } from '../lib/youtubeCache'
-import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
 import { RECOMMENDED_VIDEO_IDS } from '../config/recommendedVideos'
+import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
 interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
@@ -63,7 +63,7 @@ export default function Home({ onSelect }: Props) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Rolagem infinita do feed geral: gira entre as 3 consultas fixas,
+  // Rolagem infinita do feed geral: gira entre as consultas fixas,
   // guardando o nextPageToken de cada uma — nunca fica sem vídeo novo
   // enquanto pelo menos uma consulta ainda tiver páginas.
   const seenIdsRef = useRef(new Set<string>())
@@ -71,21 +71,21 @@ export default function Home({ onSelect }: Props) {
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
+  
   // Categorias com maior pontuação de interesse (item 3, recomendação
   // por histórico) — carregadas uma vez do IndexedDB e usadas para
   // priorizar novos vídeos que entram no feed, sem precisar re-renderizar
   // por causa disso (fica num ref, não em state).
   const topCategoriesRef = useRef<string[]>([])
 
-  // Busca inteligente (autocomplete + resultados) — antes ficava presa
-  // dentro de "Meus Canais"; agora mora na Home, a tela principal.
+  // Busca inteligente (autocomplete + resultados)
   const [input, setInput] = useState('')
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  
   // Histórico de vídeos assistidos (item 3), corpus da Fonte 1 do
-  // autocomplete. Carregado uma vez e atualizado ao focar o campo — assim
-  // não se bate no IndexedDB a cada tecla digitada.
+  // autocomplete.
   const historyRef = useRef<HistoryEntry[]>([])
   const [searchQuery, setSearchQuery] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Video[] | null>(null)
@@ -98,11 +98,7 @@ export default function Home({ onSelect }: Props) {
   const boxRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    // O catálogo salvo é local e sempre disponível — mostra na hora,
-    // garantindo que a Home nunca fique vazia, mesmo se a busca da API
-    // falhar (limite de requisições, sem internet etc). `.catch()` aqui
-    // garante que uma falha do IndexedDB (ex.: aba anônima sem suporte)
-    // não deixe a tela presa em "Carregando…" para sempre.
+    // O catálogo salvo é local e sempre disponível
     listCatalog()
       .catch(() => [])
       .then((videos) => {
@@ -137,11 +133,6 @@ export default function Home({ onSelect }: Props) {
   }, [])
 
   // Embaralha de novo toda vez que a lista de vídeos disponíveis muda
-  // — assim a ordem exibida muda a cada visita, mesmo quando o
-  // conteúdo em si ainda é o mesmo por causa do cache curto. Dentro de
-  // cada leva nova, vídeos de categorias com maior pontuação de
-  // interesse (item 3) entram primeiro — sem reordenar o que já está
-  // na tela, só priorizando o que ainda vai ser exibido.
   useEffect(() => {
     setOrder((current) => {
       const all = [...catalogVideos, ...apiVideos]
@@ -159,12 +150,7 @@ export default function Home({ onSelect }: Props) {
     })
   }, [catalogVideos, apiVideos])
 
-  // Abordagem híbrida (custo de cota): a primeira página tenta a lista
-  // curada em `recommendedVideos.ts` via endpoint `videos` (custo 1) —
-  // só cai para busca por texto (`search`, custo 100) se a lista estiver
-  // vazia ou não devolver nenhum vídeo válido. As páginas seguintes
-  // (loadMore, abaixo) sempre usam busca por texto com paginação — a API
-  // não tem "próxima página" para uma lista fixa de IDs.
+  // Abordagem híbrida (custo de cota)
   async function fetchInitial(): Promise<Video[] | null> {
     try {
       if (RECOMMENDED_VIDEO_IDS.length > 0) {
@@ -176,11 +162,7 @@ export default function Home({ onSelect }: Props) {
           return recommended
         }
       }
-      // Só a primeira consulta por texto ao carregar — buscar as 3 de
-      // uma vez é muita requisição junta, exatamente o tipo de rajada
-      // que derruba a API com erro 429. As outras 2 entram aos poucos,
-      // conforme rola (loadMore) ou quando a pessoa toca "Atualizar" de
-      // novo.
+      
       const q = QUERIES[0]
       const page = await searchVideosPage(q, undefined, 'date')
       pageTokensRef.current[q] = page.nextPageToken
@@ -194,8 +176,7 @@ export default function Home({ onSelect }: Props) {
     }
   }
 
-  // Busca a próxima página de uma das 3 consultas (revezando entre
-  // elas) quando o sentinel no fim do feed aparece na tela.
+  // Busca a próxima página de uma das consultas (revezando entre elas)
   async function loadMore() {
     if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= QUERIES.length) return
     let query: string | undefined
@@ -240,10 +221,7 @@ export default function Home({ onSelect }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMore])
 
-  // Botão "Atualizar": ignora o cache e busca vídeos novos na hora —
-  // dá controle pra pessoa decidir quando quer conteúdo fresco, sem o
-  // app ter que buscar isso sozinho toda vez (o que gastava requisições
-  // à toa e foi o que causou os erros de limite de busca antes).
+  // Botão "Atualizar"
   async function handleRefresh() {
     if (!hasApiKey() || refreshing) return
     setRefreshing(true)
@@ -261,10 +239,7 @@ export default function Home({ onSelect }: Props) {
     setCatalogVideos((current) => current.filter((v) => v.id !== video.id))
   }
 
-  // Autocomplete inteligente (item 6): sugere termos enquanto digita, a
-  // partir do histórico local (custo zero) e, só quando este devolve menos
-  // de 3 sugestões, complementa com a IA (Vercel Function do item 4). Não
-  // sugere quando o texto já é um link/ID reconhecível.
+  // Autocomplete inteligente
   useEffect(() => {
     const value = input.trim()
     if (value.length < 3 || extractVideoId(value)) {
@@ -274,7 +249,7 @@ export default function Home({ onSelect }: Props) {
     }
     let active = true
     setSuggestLoading(true)
-    // Debounce de 300ms: evita disparar a Fonte 2 (IA) a cada tecla.
+    // Debounce de 300ms
     const timer = setTimeout(() => {
       getSuggestions(value, historyRef.current, hasApiKey())
         .then((terms) => {
@@ -308,9 +283,7 @@ export default function Home({ onSelect }: Props) {
     await runSearch(input)
   }
 
-  // Executa a busca de um termo (submit do campo ou clique numa sugestão do
-  // autocomplete). Detecta link/ID de vídeo e, caso contrário, faz busca por
-  // texto com expansão por IA (item 4).
+  // Executa a busca de um termo
   async function runSearch(rawValue: string) {
     const value = rawValue.trim()
     if (!value) return
@@ -335,10 +308,7 @@ export default function Home({ onSelect }: Props) {
         setInput('')
       } else if (hasApiKey()) {
         recordInterest(categorize(value)).catch(() => {})
-        // Busca inteligente (item 4): expande o termo em sinônimos via IA e
-        // combina tudo numa única consulta usando o operador OR da API do
-        // YouTube — assim "louvor" também encontra vídeos de "música gospel",
-        // sem gastar uma segunda requisição de busca.
+        // Expande o termo em sinônimos via IA e combina tudo com OR
         const extraTerms = await expandSearchTerm(value)
         const combinedQuery = extraTerms.length > 0 ? [value, ...extraTerms].join('|') : value
         searchSeenRef.current = new Set()
@@ -359,9 +329,7 @@ export default function Home({ onSelect }: Props) {
     }
   }
 
-  // Mais resultados da mesma busca — a busca também não fica "sem
-  // vídeo": continua paginando até a API não ter mais nada, e o feed
-  // geral (infinito) continua logo abaixo de qualquer forma.
+  // Mais resultados da mesma busca
   async function loadMoreSearch() {
     if (!searchQuery || !searchTokenRef.current || searchLoadingMore) return
     setSearchLoadingMore(true)
@@ -419,8 +387,6 @@ export default function Home({ onSelect }: Props) {
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => {
               setShowSuggestions(true)
-              // Revalida o histórico ao focar — cobre vídeos assistidos
-              // depois que a Home montou, sem consultar o banco por tecla.
               listHistory()
                 .catch(() => [])
                 .then((h) => {
@@ -474,9 +440,6 @@ export default function Home({ onSelect }: Props) {
         </p>
       )}
 
-      {/* Busca por texto passa pela expansão por IA + consulta ao YouTube —
-          pode passar de meio segundo, então mostra estado de carregamento
-          enquanto os resultados não chegam (item 7, sub-item 5). */}
       {searchLoading && !searchResults && (
         <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-500 dark:text-neutral-400">
           Buscando…

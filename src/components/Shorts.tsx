@@ -384,12 +384,12 @@ export default function Shorts({ startId, onBack }: Props) {
       )}
 
       {hasApiKey() && (
-        <form onSubmit={handleSearch} className="flex shrink-0 items-center gap-2 border-b border-neutral-800 p-2 pl-12">
+        <form onSubmit={handleSearch} className="sticky top-0 z-50 flex shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-900/80 p-2 pl-12 backdrop-blur-sm">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar vídeos curtos"
-            className="flex-1 rounded-full border border-neutral-700 bg-neutral-900 px-4 py-1.5 text-sm text-white placeholder-neutral-500 focus:border-violet-500 focus:outline-none"
+            className="flex-1 rounded-full border border-neutral-700 bg-neutral-900 px-4 py-1.5 text-sm text-white placeholder-neutral-400 focus:border-violet-500 focus:outline-none"
           />
           <button
             type="submit"
