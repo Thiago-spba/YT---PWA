@@ -6,11 +6,13 @@
  */
 export function resolveThumbnail(
   videoId: string,
-  thumbnails?: { medium?: { url?: string }; default?: { url?: string } },
+  thumbnails?: { medium?: { url?: string }; default?: { url?: string }; high?: { url?: string }; maxres?: { url?: string } },
 ): string {
   return (
+    thumbnails?.maxres?.url ||
+    thumbnails?.high?.url ||
     thumbnails?.medium?.url ||
     thumbnails?.default?.url ||
-    `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+    `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
   )
 }
