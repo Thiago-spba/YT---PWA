@@ -1,17 +1,24 @@
+import { useEffect, useRef } from 'react'
 import { useShortsFeed } from '../lib/useShortsFeed'
 
 interface Props {
   onOpen: (videoId: string) => void
 }
 
-/**
- * Grade de descoberta dos vídeos curtos — usa o mesmo hook (`useShortsFeed`)
- * que o modo imersivo, então não repete nenhuma busca já feita/em cache:
- * abrir a grade depois do modo imersivo (ou vice-versa) reaproveita os
- * mesmos dados.
- */
 export default function ShortsGrid({ onOpen }: Props) {
   const { shorts, loaded, loadingMore, discoveryError, loadMore, retryDiscovery } = useShortsFeed()
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !loaded) return
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMore() },
+      { rootMargin: '600px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [loaded, loadingMore])
 
   return (
     <div className="flex h-[calc(100dvh-56px)] flex-col overflow-y-auto bg-black p-2 sm:p-3">
@@ -38,39 +45,39 @@ export default function ShortsGrid({ onOpen }: Props) {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
-          {shorts.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              onClick={() => onOpen(v.id)}
-              className="group relative aspect-9/16 overflow-hidden rounded-lg bg-neutral-900"
-            >
-              <img
-                src={v.thumbnailUrl}
-                alt=""
-                className="h-full w-full object-cover transition-transform group-hover:scale-105"
-              />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 to-transparent p-2 pt-8 text-white">
-                <p className="line-clamp-2 text-xs font-medium sm:text-sm">{v.title}</p>
-                <p className="truncate text-[11px] text-neutral-300 sm:text-xs">{v.channelTitle}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {loaded && shorts.length > 0 && (
-        <div className="flex justify-center p-3">
-          <button
-            type="button"
-            onClick={() => loadMore()}
-            disabled={loadingMore}
-            className="rounded-full bg-neutral-800 px-4 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
-          >
-            {loadingMore ? 'Carregando…' : 'Carregar mais'}
-          </button>
-        </div>
+        <>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 sm:gap-3">
+            {shorts.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => onOpen(v.id)}
+                className="group relative overflow-hidden rounded-xl bg-neutral-900 shadow-md transition-transform hover:scale-[1.03] active:scale-95"
+              >
+                <div className="aspect-video w-full overflow-hidden bg-neutral-800">
+                  <img
+                    src={v.thumbnailUrl}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                </div>
+                <div className="p-1.5 text-left">
+                  <p className="line-clamp-2 text-[11px] font-medium leading-tight text-white sm:text-xs">
+                    {v.title}
+                  </p>
+                  <p className="mt-0.5 truncate text-[10px] text-neutral-400 sm:text-[11px]">
+                    {v.channelTitle}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+          <div ref={sentinelRef} className="h-4" />
+          {loadingMore && (
+            <p className="mt-2 text-center text-sm text-neutral-400">Carregando mais vídeos…</p>
+          )}
+        </>
       )}
     </div>
   )

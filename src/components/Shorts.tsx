@@ -58,6 +58,18 @@ function TrashIcon() {
   )
 }
 
+function PlayPauseIcon({ paused }: { paused: boolean }) {
+  return paused ? (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
+      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+    </svg>
+  )
+}
+
 function MuteIcon({ muted }: { muted: boolean }) {
   return muted ? (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
@@ -75,6 +87,7 @@ function MuteIcon({ muted }: { muted: boolean }) {
 interface ThumbProps {
   video: Video
   isActive: boolean
+  muted: boolean
   registerRef: (id: string, el: HTMLDivElement | null) => void
   onVisible: () => void
 }
@@ -92,7 +105,7 @@ interface ThumbProps {
  * deixar barras vazias quando a proporção do aparelho não é exatamente
  * 9:16 (a maioria dos celulares atuais é mais alongada que isso).
  */
-function ShortThumb({ video, isActive, registerRef, onVisible }: ThumbProps) {
+function ShortThumb({ video, isActive, muted, registerRef, onVisible }: ThumbProps) {
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -123,10 +136,12 @@ function ShortThumb({ video, isActive, registerRef, onVisible }: ThumbProps) {
           decoding="async"
           className={`h-full w-full object-cover transition-opacity ${isActive ? 'opacity-0' : 'opacity-100'}`}
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 to-transparent p-4 pt-10 text-white">
-          <p className="line-clamp-2 text-sm font-medium">{video.title}</p>
-          <p className="text-xs text-neutral-300">{video.channelTitle}</p>
-        </div>
+        {muted && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-10 text-white">
+            <p className="line-clamp-2 text-sm font-medium">{video.title}</p>
+            <p className="text-xs text-neutral-300">{video.channelTitle}</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -157,6 +172,7 @@ export default function Shorts({ startId, onBack }: Props) {
   const [searchFeed, setSearchFeed] = useState<Video[] | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [muted, setMuted] = useState(true)
+  const [paused, setPaused] = useState(false)
   const [favorite, setFavorite] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
@@ -218,7 +234,7 @@ export default function Shorts({ startId, onBack }: Props) {
     loadYouTubeApi().then((YT) => {
       if (cancelled || !playerContainerRef.current) return
       playerRef.current = new YT.Player(playerContainerRef.current, {
-        videoId: shorts[0]?.id ?? '',
+        videoId: '',
         host: 'https://www.youtube-nocookie.com',
         width: '100%',
         height: '100%',
@@ -230,7 +246,10 @@ export default function Shorts({ startId, onBack }: Props) {
           },
           onStateChange: (e) => {
             // 0 = terminou: reinicia o mesmo short (efeito "loop").
-            if (e.data === 0) playerRef.current?.playVideo()
+            if (e.data === 0) { setPaused(false); playerRef.current?.playVideo() }
+            // 1 = playing, 2 = paused
+            if (e.data === 1) setPaused(false)
+            if (e.data === 2) setPaused(true)
           },
         },
       })
@@ -306,6 +325,16 @@ export default function Shorts({ startId, onBack }: Props) {
   function handleNext() {
     if (activeIndex >= 0 && activeIndex < shorts.length - 1) {
       scrollToId(shorts[activeIndex + 1].id)
+    }
+  }
+
+  function handleTogglePause() {
+    if (paused) {
+      playerRef.current?.playVideo()
+      setPaused(false)
+    } else {
+      playerRef.current?.pauseVideo()
+      setPaused(true)
     }
   }
 
@@ -443,6 +472,7 @@ export default function Shorts({ startId, onBack }: Props) {
                 key={v.id}
                 video={v}
                 isActive={v.id === activeId}
+                muted={muted}
                 registerRef={registerRef}
                 onVisible={() => setActiveId(v.id)}
               />
@@ -496,6 +526,15 @@ export default function Shorts({ startId, onBack }: Props) {
                       }`}
                     >
                       <StarIcon filled={favorite} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleTogglePause}
+                      title={paused ? 'Reproduzir' : 'Pausar'}
+                      aria-label={paused ? 'Reproduzir' : 'Pausar'}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+                    >
+                      <PlayPauseIcon paused={paused} />
                     </button>
                     <button
                       type="button"
