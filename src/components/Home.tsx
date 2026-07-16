@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { HistoryEntry, Video } from '../types'
 import VideoCard from './VideoCard'
-import { getTopCategories, listCatalog, listHistory, recordInterest, removeFromCatalog } from '../lib/db'
+import { 
+  getTopCategories, 
+  listHistory, 
+  recordInterest, 
+  removeFromCatalog,
+  refreshCatalog,
+  invalidateCatalogCaches,
+  debugCatalog
+} from '../lib/db'
 import { categorize } from '../lib/categories'
 import { expandSearchTerm } from '../lib/aiSearch'
 import { getSuggestions } from '../lib/searchSuggest'
@@ -14,16 +22,11 @@ interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
 }
 
-// Cache curto em memória: sem isso, cada vez que o usuário voltava
-// para "Início" — a aba padrão — o app disparava buscas novas, mesmo
-// trocando de aba e voltando em segundos. Isso esgotava o limite de
-// requisições da API rápido, causando erro 403/429 em outras telas
-// (como Shorts) depois de pouco uso. 5 minutos segura esse limite sem
-// deixar o feed velho — a ordem também muda a cada visita, e dá pra
-// forçar vídeos novos na hora com o botão "Atualizar".
+// Cache curto em memória
 let cachedVideos: Video[] | null = null
 let cachedAt = 0
 const CACHE_TTL_MS = 5 * 60 * 1000
+let forceRefreshCache = false // 🔥 NOVO: flag para forçar refresh
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items]
@@ -52,9 +55,7 @@ function RefreshIcon() {
 }
 
 export default function Home({ onSelect }: Props) {
-  // Catálogo salvo (local, sem custo de cota) e vídeos da API ficam em
-  // estados separados — assim dá pra saber quais cartões têm lixeira
-  // (só os salvos) e "Atualizar" não perde o que já carregou.
+  // Catálogo salvo e vídeos da API
   const [catalogVideos, setCatalogVideos] = useState<Video[]>([])
   const [apiVideos, setApiVideos] = useState<Video[]>([])
   const [order, setOrder] = useState<string[]>([])
@@ -63,30 +64,26 @@ export default function Home({ onSelect }: Props) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Rolagem infinita do feed geral: gira entre as consultas fixas,
-  // guardando o nextPageToken de cada uma — nunca fica sem vídeo novo
-  // enquanto pelo menos uma consulta ainda tiver páginas.
+  // Rolagem infinita
   const seenIdsRef = useRef(new Set<string>())
   const pageTokensRef = useRef<Record<string, string | undefined>>({})
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   
-  // Categorias com maior pontuação de interesse (item 3, recomendação
-  // por histórico) — carregadas uma vez do IndexedDB e usadas para
-  // priorizar novos vídeos que entram no feed, sem precisar re-renderizar
-  // por causa disso (fica num ref, não em state).
+  // Categorias de interesse
   const topCategoriesRef = useRef<string[]>([])
 
-  // Busca inteligente (autocomplete + resultados)
+  // Busca inteligente
   const [input, setInput] = useState('')
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   
-  // Histórico de vídeos assistidos (item 3), corpus da Fonte 1 do
-  // autocomplete.
+  // Histórico
   const historyRef = useRef<HistoryEntry[]>([])
+  
+  // Estado da busca
   const [searchQuery, setSearchQuery] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Video[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -97,15 +94,24 @@ export default function Home({ onSelect }: Props) {
   const searchSentinelRef = useRef<HTMLDivElement | null>(null)
   const boxRef = useRef<HTMLDivElement | null>(null)
 
+  // ============================================================
+  // 🔥 INICIALIZAÇÃO COM REFRESH FORÇADO
+  // ============================================================
   useEffect(() => {
-    // O catálogo salvo é local e sempre disponível
-    listCatalog()
-          .catch(() => [])
-          .then((videos) => {
-            setCatalogVideos(videos)
-            videos.forEach((v) => seenIdsRef.current.add(v.id))
-            setLoading(false)
-          })
+    // 🔥 Força limpeza de caches do catálogo
+    invalidateCatalogCaches()
+    
+    // 🔥 Usa refreshCatalog() em vez de listCatalog() para garantir dados frescos
+    refreshCatalog()
+      .catch(() => [])
+      .then((videos) => {
+        console.log(`📊 Home: ${videos.length} vídeos carregados do catálogo`)
+        setCatalogVideos(videos)
+        // 🔥 LIMPA seenIds ANTES de adicionar os novos
+        seenIdsRef.current = new Set()
+        videos.forEach((v) => seenIdsRef.current.add(v.id))
+        setLoading(false)
+      })
 
     getTopCategories(5)
       .catch(() => [])
@@ -121,23 +127,98 @@ export default function Home({ onSelect }: Props) {
 
     if (!hasApiKey()) return
 
-    if (cachedVideos && Date.now() - cachedAt < CACHE_TTL_MS) {
+    // 🔥 Verifica se deve usar cache ou forçar refresh
+    const shouldUseCache = !forceRefreshCache && cachedVideos && Date.now() - cachedAt < CACHE_TTL_MS
+    
+    if (shouldUseCache && cachedVideos) {
       setApiVideos(cachedVideos)
       cachedVideos.forEach((v) => seenIdsRef.current.add(v.id))
       return
     }
 
+    // 🔥 Se forceRefreshCache estiver ativo, limpa e recarrega
+    if (forceRefreshCache) {
+      console.log('🔄 Forçando refresh do cache da API')
+      cachedVideos = null
+      cachedAt = 0
+      forceRefreshCache = false
+    }
+
     fetchInitial().then((videos) => {
-      if (videos) setApiVideos(videos)
+      if (videos) {
+        setApiVideos(videos)
+        videos.forEach((v) => seenIdsRef.current.add(v.id))
+      }
     })
   }, [])
 
-  // Embaralha de novo toda vez que a lista de vídeos disponíveis muda
+  // ============================================================
+  // 🔥 DETECTA MUDANÇAS NO CATÁLOGO
+  // ============================================================
+  useEffect(() => {
+    const reloadCatalog = async () => {
+      try {
+        const freshCatalog = await refreshCatalog()
+        console.log(`🔄 Catálogo atualizado: ${freshCatalog.length} vídeos`)
+        setCatalogVideos(freshCatalog)
+        freshCatalog.forEach((v) => seenIdsRef.current.add(v.id))
+      } catch (error) {
+        console.error('❌ Erro ao recarregar catálogo:', error)
+      }
+    }
+
+    // Verifica mudanças a cada 3 segundos
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshCatalog()
+          .then((currentCatalog) => {
+            const currentIds = new Set(catalogVideos.map(v => v.id))
+            const newIds = new Set(currentCatalog.map(v => v.id))
+            
+            let hasChanged = false
+            if (currentIds.size !== newIds.size) {
+              hasChanged = true
+            } else {
+              for (const id of currentIds) {
+                if (!newIds.has(id)) {
+                  hasChanged = true
+                  break
+                }
+              }
+            }
+            
+            if (hasChanged) {
+              console.log('🔄 Mudança detectada no catálogo, recarregando...')
+              reloadCatalog()
+            }
+          })
+          .catch(() => {})
+      }
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [catalogVideos])
+
+  // ============================================================
+  // 🔥 REORDENAÇÃO COM LIMPEZA
+  // ============================================================
   useEffect(() => {
     setOrder((current) => {
       const all = [...catalogVideos, ...apiVideos]
-      const known = new Set(current)
+      
+      if (all.length === 0) {
+        return []
+      }
+      
+      const validIds = new Set(all.map(v => v.id))
+      const filteredCurrent = current.filter(id => validIds.has(id))
+      const known = new Set(filteredCurrent)
       const fresh = all.filter((v) => !known.has(v.id))
+      
+      if (fresh.length === 0) {
+        return filteredCurrent
+      }
+      
       const top = topCategoriesRef.current
       const prioritizedIds = new Set(
         top.length > 0
@@ -146,13 +227,23 @@ export default function Home({ onSelect }: Props) {
       )
       const prioritized = fresh.filter((v) => prioritizedIds.has(v.id)).map((v) => v.id)
       const rest = fresh.filter((v) => !prioritizedIds.has(v.id)).map((v) => v.id)
-      return [...current, ...shuffle(prioritized), ...shuffle(rest)]
+      
+      return [...filteredCurrent, ...shuffle(prioritized), ...shuffle(rest)]
     })
   }, [catalogVideos, apiVideos])
 
-  // Abordagem híbrida (custo de cota)
+  // ============================================================
+  // 🔥 BUSCA INICIAL
+  // ============================================================
   async function fetchInitial(): Promise<Video[] | null> {
     try {
+      if (forceRefreshCache) {
+        console.log('🔄 Resetando cache da API para buscar dados frescos')
+        cachedVideos = null
+        cachedAt = 0
+        forceRefreshCache = false
+      }
+
       if (RECOMMENDED_VIDEO_IDS.length > 0) {
         const recommended = await getVideosByIds(RECOMMENDED_VIDEO_IDS)
         if (recommended.length > 0) {
@@ -176,7 +267,9 @@ export default function Home({ onSelect }: Props) {
     }
   }
 
-  // Busca a próxima página de uma das consultas (revezando entre elas)
+  // ============================================================
+  // 🔥 LOAD MORE
+  // ============================================================
   async function loadMore() {
     if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= QUERIES.length) return
     let query: string | undefined
@@ -218,28 +311,71 @@ export default function Home({ onSelect }: Props) {
     )
     observer.observe(el)
     return () => observer.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMore])
 
-  // Botão "Atualizar"
+  // ============================================================
+  // 🔥 REFRESH MANUAL
+  // ============================================================
   async function handleRefresh() {
     if (!hasApiKey() || refreshing) return
     setRefreshing(true)
     setError(null)
+    
+    console.log('🔄 Atualizando feed...')
+    
+    // 1. Invalida todos os caches
+    invalidateCatalogCaches()
+    
+    // 2. Limpa cache da API e força refresh
+    forceRefreshCache = true
+    cachedVideos = null
+    cachedAt = 0
+    
+    // 3. Limpa seenIds
+    seenIdsRef.current = new Set()
+    
+    // 4. Recarrega o catálogo
+    try {
+      const freshCatalog = await refreshCatalog()
+      console.log(`📊 Catálogo atualizado: ${freshCatalog.length} vídeos`)
+      setCatalogVideos(freshCatalog)
+      freshCatalog.forEach((v) => seenIdsRef.current.add(v.id))
+    } catch (error) {
+      console.error('❌ Erro ao recarregar catálogo:', error)
+    }
+    
+    // 5. Reseta tokens
     pageTokensRef.current = {}
     exhaustedRef.current.clear()
     queryTurnRef.current = 0
+    
+    // 6. Busca novos vídeos
     const videos = await fetchInitial()
-    if (videos) setApiVideos(videos)
+    if (videos) {
+      console.log(`📊 API retornou ${videos.length} vídeos`)
+      setApiVideos(videos)
+      videos.forEach((v) => seenIdsRef.current.add(v.id))
+    }
+    
+    // 7. Força reordenação
+    setOrder([])
+    
     setRefreshing(false)
+    console.log('✅ Refresh completo')
   }
 
   async function handleDeleteFromCatalog(video: Video) {
     await removeFromCatalog(video.id)
-    setCatalogVideos((current) => current.filter((v) => v.id !== video.id))
+    setCatalogVideos((current) => {
+      const updated = current.filter((v) => v.id !== video.id)
+      seenIdsRef.current.delete(video.id)
+      return updated
+    })
   }
 
-  // Autocomplete inteligente
+  // ============================================================
+  // 🔥 AUTOCOMPLETE
+  // ============================================================
   useEffect(() => {
     const value = input.trim()
     if (value.length < 3 || extractVideoId(value)) {
@@ -249,7 +385,6 @@ export default function Home({ onSelect }: Props) {
     }
     let active = true
     setSuggestLoading(true)
-    // Debounce de 300ms
     const timer = setTimeout(() => {
       getSuggestions(value, historyRef.current, hasApiKey())
         .then((terms) => {
@@ -278,12 +413,14 @@ export default function Home({ onSelect }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // ============================================================
+  // 🔥 BUSCA
+  // ============================================================
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     await runSearch(input)
   }
 
-  // Executa a busca de um termo
   async function runSearch(rawValue: string) {
     const value = rawValue.trim()
     if (!value) return
@@ -308,7 +445,6 @@ export default function Home({ onSelect }: Props) {
         setInput('')
       } else if (hasApiKey()) {
         recordInterest(categorize(value)).catch(() => {})
-        // Expande o termo em sinônimos via IA e combina tudo com OR
         const extraTerms = await expandSearchTerm(value)
         const combinedQuery = extraTerms.length > 0 ? [value, ...extraTerms].join('|') : value
         searchSeenRef.current = new Set()
@@ -329,7 +465,6 @@ export default function Home({ onSelect }: Props) {
     }
   }
 
-  // Mais resultados da mesma busca
   async function loadMoreSearch() {
     if (!searchQuery || !searchTokenRef.current || searchLoadingMore) return
     setSearchLoadingMore(true)
@@ -358,7 +493,6 @@ export default function Home({ onSelect }: Props) {
     )
     observer.observe(el)
     return () => observer.disconnect()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, searchLoadingMore])
 
   function handleSelectSuggestion(term: string) {
@@ -374,12 +508,23 @@ export default function Home({ onSelect }: Props) {
     setInput('')
   }
 
+  // ============================================================
+  // 🔥 RENDER
+  // ============================================================
   const catalogIds = new Set(catalogVideos.map((v) => v.id))
   const byId = new Map([...catalogVideos, ...apiVideos].map((v) => [v.id, v]))
   const videos = order.map((id) => byId.get(id)!).filter(Boolean)
 
+  // Debug em desenvolvimento
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      debugCatalog().catch(() => {})
+    }
+  }, [])
+
   return (
     <div className="mx-auto max-w-[1800px] p-4">
+      {/* BUSCA */}
       <div ref={boxRef} className="relative mx-auto mb-6 max-w-2xl">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
@@ -434,6 +579,7 @@ export default function Home({ onSelect }: Props) {
         )}
       </div>
 
+      {/* STATUS DA BUSCA */}
       {searchStatus && (
         <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-600 dark:text-neutral-300">
           {searchStatus}
@@ -446,6 +592,7 @@ export default function Home({ onSelect }: Props) {
         </p>
       )}
 
+      {/* RESULTADOS DA BUSCA */}
       {searchResults && (
         <section className="mb-8">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -478,6 +625,7 @@ export default function Home({ onSelect }: Props) {
         </section>
       )}
 
+      {/* FEED PRINCIPAL */}
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">{searchResults ? 'Mais vídeos' : 'Início'}</h2>
         {hasApiKey() && (
@@ -492,9 +640,11 @@ export default function Home({ onSelect }: Props) {
           </button>
         )}
       </div>
+
       {loading && videos.length === 0 && (
         <p className="text-sm text-neutral-500 dark:text-neutral-400">Carregando…</p>
       )}
+      
       {error && videos.length === 0 && (
         <p
           className={
@@ -506,11 +656,13 @@ export default function Home({ onSelect }: Props) {
           {error}
         </p>
       )}
+      
       {!loading && !error && videos.length === 0 && (
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
           Nenhum vídeo por aqui ainda. Busque acima ou adicione vídeos em "Meus Canais" para começar.
         </p>
       )}
+      
       {videos.length > 0 && (
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">

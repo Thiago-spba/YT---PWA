@@ -13,10 +13,6 @@ let dbPromise: Promise<IDBPDatabase<YtPwaDB>> | null = null
 
 function getDB() {
   if (!dbPromise) {
-    // Se abrir o banco falhar (ex.: aba anônima sem suporte a IndexedDB,
-    // InvalidStateError), não guarda a promise rejeitada — assim a próxima
-    // chamada tenta abrir de novo em vez de falhar para sempre com o
-    // mesmo erro cacheado.
     dbPromise = openDB<YtPwaDB>('yt-pwa', 3, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
@@ -39,62 +35,99 @@ function getDB() {
   return dbPromise
 }
 
+// ============================================================
+// 📦 CATALOG - FUNÇÕES PRINCIPAIS
+// ============================================================
+
 export async function addToCatalog(video: Video): Promise<void> {
   const db = await getDB()
   await db.put('catalog', { ...video, addedAt: Date.now() })
+  // 🔥 Invalida caches após adicionar
+  invalidateCatalogCaches()
 }
 
 export async function removeFromCatalog(id: string): Promise<void> {
   const db = await getDB()
   await db.delete('catalog', id)
+  // 🔥 Invalida caches após remover
+  invalidateCatalogCaches()
 }
 
 /**
- * Atualiza isShort/durationSeconds de itens já salvos, sem mexer em
- * addedAt (preserva a posição no catálogo) — usado para "preencher"
- * vídeos antigos que foram adicionados antes da checagem de duração
- * existir, ou sem a chave de API configurada na hora.
+ * 🔥 NOVA FUNÇÃO: Limpa TODO o catálogo de uma vez
  */
-export async function updateCatalogVideoFlags(
-  updates: { id: string; isShort?: boolean; durationSeconds?: number }[],
-): Promise<void> {
+export async function clearCatalog(): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction('catalog', 'readwrite')
-  for (const u of updates) {
-    const existing = await tx.store.get(u.id)
-    if (existing) {
-      await tx.store.put({ ...existing, isShort: u.isShort, durationSeconds: u.durationSeconds })
-    }
-  }
-  await tx.done
+  await db.clear('catalog')
+  // 🔥 Invalida caches após limpar
+  invalidateCatalogCaches()
+  console.log('🗑️ Catálogo limpo completamente')
 }
 
+/**
+ * 🔥 NOVA FUNÇÃO: Verifica se o catálogo está vazio
+ */
+export async function isCatalogEmpty(): Promise<boolean> {
+  const db = await getDB()
+  const count = await db.count('catalog')
+  return count === 0
+}
+
+/**
+ * 🔥 NOVA FUNÇÃO: Obtém a quantidade de vídeos no catálogo
+ */
+export async function getCatalogCount(): Promise<number> {
+  const db = await getDB()
+  return await db.count('catalog')
+}
+
+/**
+ * 🔥 NOVA FUNÇÃO: Lista o catálogo SEMPRE do banco (ignora caches)
+ */
 export async function listCatalog(): Promise<CatalogEntry[]> {
   const db = await getDB()
+  
+  // 🔥 Sempre buscar do banco, nunca usar cache
   const all = await db.getAll('catalog')
-  return all.sort((a, b) => b.addedAt - a.addedAt)
+  
+  // Ordenar por data de adição (mais recente primeiro)
+  const sorted = all.sort((a, b) => b.addedAt - a.addedAt)
+  
+  console.log(`📊 Catálogo: ${sorted.length} vídeos encontrados`)
+  
+  // Se estiver vazio, log para debug
+  if (sorted.length === 0) {
+    console.warn('⚠️ Catálogo está vazio!')
+  }
+  
+  return sorted
 }
 
-// Cache em memória dos IDs de favoritos e da playlist (item 7, otimização
-// de performance). Antes, cada VideoCard fazia 2 leituras próprias ao
-// IndexedDB ao montar — num feed com dezenas/centenas de cards, isso virava
-// centenas de micro-transações. Agora cada conjunto é lido uma vez
-// (`getAllKeys`) e reusado por todos os cards; os toggles abaixo mantêm o
-// cache em dia, então grids e telas permanecem consistentes. Leituras
-// diretas (`isFavorite`/`isInPlaylist`, usadas fora dos grids) continuam
-// batendo no banco, que é sempre a verdade — o cache é só uma otimização
-// para renderizar listas longas. Mesmo padrão dos caches de módulo já
-// usados em Home e useShortsFeed.
-let favoriteIdsCache: Set<string> | null = null
-let playlistIdsCache: Set<string> | null = null
-// Promessa em voo: quando dezenas de cards montam juntos no primeiro
-// render, todos compartilham uma única leitura ao banco em vez de disparar
-// uma cada. Depois de resolvida, o Set cacheado (`*IdsCache`) atende as
-// próximas chamadas de forma síncrona e é o que os toggles mantêm em dia.
-let favoriteIdsPromise: Promise<Set<string>> | null = null
-let playlistIdsPromise: Promise<Set<string>> | null = null
+/**
+ * 🔥 NOVA FUNÇÃO: Força o recarregamento do catálogo (limpa caches)
+ */
+export async function refreshCatalog(): Promise<CatalogEntry[]> {
+  console.log('🔄 Forçando refresh do catálogo...')
+  invalidateCatalogCaches()
+  return await listCatalog()
+}
 
-/** Conjunto de IDs favoritados, lido do banco só uma vez por sessão. */
+// ============================================================
+// 📦 FAVORITES - COM CACHE CONTROLADO
+// ============================================================
+
+let favoriteIdsCache: Set<string> | null = null
+let favoriteIdsPromise: Promise<Set<string>> | null = null
+
+/**
+ * 🔥 NOVA FUNÇÃO: Invalida o cache de favoritos
+ */
+export function invalidateFavoritesCache(): void {
+  favoriteIdsCache = null
+  favoriteIdsPromise = null
+  console.log('🔄 Cache de favoritos invalidado')
+}
+
 export async function getFavoriteIds(): Promise<Set<string>> {
   if (favoriteIdsCache) return favoriteIdsCache
   if (!favoriteIdsPromise) {
@@ -106,20 +139,6 @@ export async function getFavoriteIds(): Promise<Set<string>> {
     })()
   }
   return favoriteIdsPromise
-}
-
-/** Conjunto de IDs na playlist, lido do banco só uma vez por sessão. */
-export async function getPlaylistIds(): Promise<Set<string>> {
-  if (playlistIdsCache) return playlistIdsCache
-  if (!playlistIdsPromise) {
-    playlistIdsPromise = (async () => {
-      const db = await getDB()
-      const set = new Set<string>(await db.getAllKeys('playlist'))
-      playlistIdsCache = set
-      return set
-    })()
-  }
-  return playlistIdsPromise
 }
 
 export async function toggleFavorite(video: Video): Promise<boolean> {
@@ -146,46 +165,37 @@ export async function listFavorites(): Promise<CatalogEntry[]> {
   return all.sort((a, b) => b.addedAt - a.addedAt)
 }
 
-export async function recordHistory(video: Video): Promise<void> {
-  const db = await getDB()
-  await db.put('history', { ...video, watchedAt: Date.now() })
+// ============================================================
+// 📦 PLAYLIST - COM CACHE CONTROLADO
+// ============================================================
+
+let playlistIdsCache: Set<string> | null = null
+let playlistIdsPromise: Promise<Set<string>> | null = null
+
+/**
+ * 🔥 NOVA FUNÇÃO: Invalida o cache da playlist
+ */
+export function invalidatePlaylistCache(): void {
+  playlistIdsCache = null
+  playlistIdsPromise = null
+  console.log('🔄 Cache da playlist invalidado')
 }
 
-export async function listHistory(): Promise<HistoryEntry[]> {
-  const db = await getDB()
-  const all = await db.getAll('history')
-  return all.sort((a, b) => b.watchedAt - a.watchedAt)
-}
-
-export async function removeHistoryEntry(id: string): Promise<void> {
-  const db = await getDB()
-  await db.delete('history', id)
-}
-
-export async function clearHistory(): Promise<void> {
-  const db = await getDB()
-  await db.clear('history')
-}
-
-export async function listPlaylist(): Promise<PlaylistEntry[]> {
-  const db = await getDB()
-  const all = await db.getAll('playlist')
-  return all.sort((a, b) => a.position - b.position)
-}
-
-export async function isInPlaylist(id: string): Promise<boolean> {
-  const db = await getDB()
-  return (await db.get('playlist', id)) !== undefined
+export async function getPlaylistIds(): Promise<Set<string>> {
+  if (playlistIdsCache) return playlistIdsCache
+  if (!playlistIdsPromise) {
+    playlistIdsPromise = (async () => {
+      const db = await getDB()
+      const set = new Set<string>(await db.getAllKeys('playlist'))
+      playlistIdsCache = set
+      return set
+    })()
+  }
+  return playlistIdsPromise
 }
 
 export async function toggleInPlaylist(video: Video): Promise<boolean> {
   const db = await getDB()
-  // Leitura (posição máxima atual) e escrita na MESMA transação — se
-  // duas chamadas acontecem quase juntas (dois cliques em "+" rápidos),
-  // o IndexedDB serializa as transações na mesma object store, evitando
-  // que ambas leiam a lista vazia/desatualizada e calculem a mesma
-  // posição (bug real encontrado no teste: os dois itens ficavam com
-  // position: 0).
   const tx = db.transaction('playlist', 'readwrite')
   const store = tx.store
   const existing = await store.get(video.id)
@@ -201,6 +211,17 @@ export async function toggleInPlaylist(video: Video): Promise<boolean> {
   await tx.done
   playlistIdsCache?.add(video.id)
   return true
+}
+
+export async function isInPlaylist(id: string): Promise<boolean> {
+  const db = await getDB()
+  return (await db.get('playlist', id)) !== undefined
+}
+
+export async function listPlaylist(): Promise<PlaylistEntry[]> {
+  const db = await getDB()
+  const all = await db.getAll('playlist')
+  return all.sort((a, b) => a.position - b.position)
 }
 
 export async function removeFromPlaylist(id: string): Promise<void> {
@@ -223,11 +244,35 @@ export async function movePlaylistItem(id: string, direction: 'up' | 'down'): Pr
   await tx.done
 }
 
-// Meia-vida do interesse por categoria: sem isso, uma fase antiga (ex:
-// duas semanas assistindo muito de uma categoria) continuaria dominando
-// a Home pra sempre. A pontuação é recalculada só na leitura/escrita
-// (sem cron nem campo extra no modelo) — a cada 14 dias sem atividade
-// naquela categoria, o placar cai pela metade.
+// ============================================================
+// 📦 HISTORY
+// ============================================================
+
+export async function recordHistory(video: Video): Promise<void> {
+  const db = await getDB()
+  await db.put('history', { ...video, watchedAt: Date.now() })
+}
+
+export async function listHistory(): Promise<HistoryEntry[]> {
+  const db = await getDB()
+  const all = await db.getAll('history')
+  return all.sort((a, b) => b.watchedAt - a.watchedAt)
+}
+
+export async function removeHistoryEntry(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('history', id)
+}
+
+export async function clearHistory(): Promise<void> {
+  const db = await getDB()
+  await db.clear('history')
+}
+
+// ============================================================
+// 📦 INTERESTS
+// ============================================================
+
 const INTEREST_HALF_LIFE_MS = 14 * 24 * 60 * 60 * 1000
 
 function decayedScore(entry: InterestEntry, now: number): number {
@@ -236,7 +281,6 @@ function decayedScore(entry: InterestEntry, now: number): number {
   return entry.score * Math.pow(0.5, elapsedMs / INTEREST_HALF_LIFE_MS)
 }
 
-/** Registra que o usuário buscou ou assistiu algo de cada categoria — usado pela recomendação da Home (sem IA). */
 export async function recordInterest(categories: string[], weight = 1): Promise<void> {
   if (categories.length === 0) return
   const db = await getDB()
@@ -250,7 +294,6 @@ export async function recordInterest(categories: string[], weight = 1): Promise<
   await tx.done
 }
 
-/** As categorias com maior pontuação (já aplicando o decaimento por tempo), usadas para priorizar a Home. */
 export async function getTopCategories(limit = 5): Promise<string[]> {
   const db = await getDB()
   const all = await db.getAll('interests')
@@ -261,4 +304,172 @@ export async function getTopCategories(limit = 5): Promise<string[]> {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((entry) => entry.category)
+}
+
+// ============================================================
+// 🔥 FUNÇÕES DE RESET COMPLETO (NOVAS)
+// ============================================================
+
+/**
+ * 🔥 NOVA FUNÇÃO: Invalida TODOS os caches em memória
+ */
+export function invalidateCatalogCaches(): void {
+  invalidateFavoritesCache()
+  invalidatePlaylistCache()
+  console.log('🔄 Todos os caches invalidados')
+}
+
+/**
+ * 🔥 NOVA FUNÇÃO: Reset COMPLETO do catálogo
+ * - Limpa todos os vídeos
+ * - Invalida todos os caches
+ * - Força recarga
+ */
+export async function resetCatalog(): Promise<void> {
+  console.log('🔄 Resetando catálogo completamente...')
+  
+  // 1. Limpar o banco
+  await clearCatalog()
+  
+  // 2. Invalidar caches
+  invalidateCatalogCaches()
+  
+  // 3. Verificar se limpou
+  const count = await getCatalogCount()
+  console.log(`✅ Reset concluído. Catálogo agora tem ${count} vídeos`)
+}
+
+/**
+ * 🔥 NOVA FUNÇÃO: Reset COMPLETO do app (todas as stores)
+ * USO: Quando o usuário quer limpar todos os dados
+ */
+export async function resetAllData(): Promise<void> {
+  console.log('🔄 Resetando TODOS os dados do app...')
+  
+  const db = await getDB()
+  
+  // Limpar todas as stores
+  await db.clear('catalog')
+  await db.clear('favorites')
+  await db.clear('history')
+  await db.clear('playlist')
+  await db.clear('interests')
+  
+  // Invalidar todos os caches
+  invalidateCatalogCaches()
+  
+  console.log('✅ Todos os dados foram resetados')
+}
+
+/**
+ * 🔥 NOVA FUNÇÃO: Verifica integridade do banco
+ */
+export async function checkDatabaseHealth(): Promise<{
+  catalog: number
+  favorites: number
+  history: number
+  playlist: number
+  interests: number
+  dbExists: boolean
+}> {
+  try {
+    const db = await getDB()
+    const [catalog, favorites, history, playlist, interests] = await Promise.all([
+      db.count('catalog'),
+      db.count('favorites'),
+      db.count('history'),
+      db.count('playlist'),
+      db.count('interests'),
+    ])
+    
+    return {
+      catalog,
+      favorites,
+      history,
+      playlist,
+      interests,
+      dbExists: true,
+    }
+  } catch (error) {
+    console.error('❌ Erro ao verificar saúde do banco:', error)
+    return {
+      catalog: 0,
+      favorites: 0,
+      history: 0,
+      playlist: 0,
+      interests: 0,
+      dbExists: false,
+    }
+  }
+}
+
+/**
+ * 🔥 NOVA FUNÇÃO: Atualiza vídeos do catálogo em lote
+ * Útil para sincronizar com a API
+ */
+export async function syncCatalog(videos: Video[]): Promise<void> {
+  console.log(`🔄 Sincronizando catálogo com ${videos.length} vídeos...`)
+  
+  // Limpar catálogo existente
+  await clearCatalog()
+  
+  // Adicionar novos vídeos
+  const db = await getDB()
+  const tx = db.transaction('catalog', 'readwrite')
+  for (const video of videos) {
+    await tx.store.put({ ...video, addedAt: Date.now() })
+  }
+  await tx.done
+  
+  // Invalidar caches
+  invalidateCatalogCaches()
+  
+  console.log(`✅ Catálogo sincronizado: ${videos.length} vídeos`)
+}
+
+// ============================================================
+// 🔧 FUNÇÕES DE DEBUG (NOVAS)
+// ============================================================
+
+/**
+ * 🔥 NOVA FUNÇÃO: Debug - mostra o estado atual do catálogo
+ */
+export async function debugCatalog(): Promise<void> {
+  const videos = await listCatalog()
+  console.log('📊 DEBUG CATÁLOGO:')
+  console.log(`  Total: ${videos.length} vídeos`)
+  
+  if (videos.length > 0) {
+    console.log('  Últimos 5 vídeos:')
+    videos.slice(0, 5).forEach((v, i) => {
+      console.log(`    ${i+1}. ${v.title} (${v.id}) - ${new Date(v.addedAt).toLocaleString()}`)
+    })
+  }
+  
+  const health = await checkDatabaseHealth()
+  console.log('  Saúde do banco:', health)
+}
+
+// ============================================================
+// ⚠️ FUNÇÕES DE MIGRAÇÃO (NOVAS)
+// ============================================================
+
+/**
+ * 🔥 NOVA FUNÇÃO: Atualiza flags de vídeos do catálogo
+ * (mantida da versão anterior)
+ */
+export async function updateCatalogVideoFlags(
+  updates: { id: string; isShort?: boolean; durationSeconds?: number }[],
+): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction('catalog', 'readwrite')
+  for (const u of updates) {
+    const existing = await tx.store.get(u.id)
+    if (existing) {
+      await tx.store.put({ ...existing, isShort: u.isShort, durationSeconds: u.durationSeconds })
+    }
+  }
+  await tx.done
+  // Invalida caches após atualizar
+  invalidateCatalogCaches()
 }
