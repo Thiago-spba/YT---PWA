@@ -105,7 +105,6 @@ export default function Home({ onSelect }: Props) {
     refreshCatalog()
       .catch(() => [])
       .then((videos) => {
-        console.log(`📊 Home: ${videos.length} vídeos carregados do catálogo`)
         setCatalogVideos(videos)
         // 🔥 LIMPA seenIds ANTES de adicionar os novos
         seenIdsRef.current = new Set()
@@ -138,7 +137,6 @@ export default function Home({ onSelect }: Props) {
 
     // 🔥 Se forceRefreshCache estiver ativo, limpa e recarrega
     if (forceRefreshCache) {
-      console.log('🔄 Forçando refresh do cache da API')
       cachedVideos = null
       cachedAt = 0
       forceRefreshCache = false
@@ -159,7 +157,6 @@ export default function Home({ onSelect }: Props) {
     const reloadCatalog = async () => {
       try {
         const freshCatalog = await refreshCatalog()
-        console.log(`🔄 Catálogo atualizado: ${freshCatalog.length} vídeos`)
         setCatalogVideos(freshCatalog)
         freshCatalog.forEach((v) => seenIdsRef.current.add(v.id))
       } catch (error) {
@@ -188,7 +185,6 @@ export default function Home({ onSelect }: Props) {
             }
             
             if (hasChanged) {
-              console.log('🔄 Mudança detectada no catálogo, recarregando...')
               reloadCatalog()
             }
           })
@@ -238,7 +234,6 @@ export default function Home({ onSelect }: Props) {
   async function fetchInitial(): Promise<Video[] | null> {
     try {
       if (forceRefreshCache) {
-        console.log('🔄 Resetando cache da API para buscar dados frescos')
         cachedVideos = null
         cachedAt = 0
         forceRefreshCache = false
@@ -320,9 +315,6 @@ export default function Home({ onSelect }: Props) {
     if (!hasApiKey() || refreshing) return
     setRefreshing(true)
     setError(null)
-    
-    console.log('🔄 Atualizando feed...')
-    
     // 1. Invalida todos os caches
     invalidateCatalogCaches()
     
@@ -337,7 +329,6 @@ export default function Home({ onSelect }: Props) {
     // 4. Recarrega o catálogo
     try {
       const freshCatalog = await refreshCatalog()
-      console.log(`📊 Catálogo atualizado: ${freshCatalog.length} vídeos`)
       setCatalogVideos(freshCatalog)
       freshCatalog.forEach((v) => seenIdsRef.current.add(v.id))
     } catch (error) {
@@ -352,7 +343,6 @@ export default function Home({ onSelect }: Props) {
     // 6. Busca novos vídeos
     const videos = await fetchInitial()
     if (videos) {
-      console.log(`📊 API retornou ${videos.length} vídeos`)
       setApiVideos(videos)
       videos.forEach((v) => seenIdsRef.current.add(v.id))
     }
@@ -361,7 +351,6 @@ export default function Home({ onSelect }: Props) {
     setOrder([])
     
     setRefreshing(false)
-    console.log('✅ Refresh completo')
   }
 
   async function handleDeleteFromCatalog(video: Video) {

@@ -123,7 +123,7 @@ function ShortThumb({ video, isActive, registerRef, onVisible }: ThumbProps) {
           decoding="async"
           className={`h-full w-full object-cover transition-opacity ${isActive ? 'opacity-0' : 'opacity-100'}`}
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-10 text-white">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 to-transparent p-4 pt-10 text-white">
           <p className="line-clamp-2 text-sm font-medium">{video.title}</p>
           <p className="text-xs text-neutral-300">{video.channelTitle}</p>
         </div>

@@ -61,7 +61,6 @@ export async function clearCatalog(): Promise<void> {
   await db.clear('catalog')
   // 🔥 Invalida caches após limpar
   invalidateCatalogCaches()
-  console.log('🗑️ Catálogo limpo completamente')
 }
 
 /**
@@ -92,12 +91,8 @@ export async function listCatalog(): Promise<CatalogEntry[]> {
   
   // Ordenar por data de adição (mais recente primeiro)
   const sorted = all.sort((a, b) => b.addedAt - a.addedAt)
-  
-  console.log(`📊 Catálogo: ${sorted.length} vídeos encontrados`)
-  
   // Se estiver vazio, log para debug
   if (sorted.length === 0) {
-    console.warn('⚠️ Catálogo está vazio!')
   }
   
   return sorted
@@ -107,7 +102,6 @@ export async function listCatalog(): Promise<CatalogEntry[]> {
  * 🔥 NOVA FUNÇÃO: Força o recarregamento do catálogo (limpa caches)
  */
 export async function refreshCatalog(): Promise<CatalogEntry[]> {
-  console.log('🔄 Forçando refresh do catálogo...')
   invalidateCatalogCaches()
   return await listCatalog()
 }
@@ -125,7 +119,6 @@ let favoriteIdsPromise: Promise<Set<string>> | null = null
 export function invalidateFavoritesCache(): void {
   favoriteIdsCache = null
   favoriteIdsPromise = null
-  console.log('🔄 Cache de favoritos invalidado')
 }
 
 export async function getFavoriteIds(): Promise<Set<string>> {
@@ -178,7 +171,6 @@ let playlistIdsPromise: Promise<Set<string>> | null = null
 export function invalidatePlaylistCache(): void {
   playlistIdsCache = null
   playlistIdsPromise = null
-  console.log('🔄 Cache da playlist invalidado')
 }
 
 export async function getPlaylistIds(): Promise<Set<string>> {
@@ -316,7 +308,6 @@ export async function getTopCategories(limit = 5): Promise<string[]> {
 export function invalidateCatalogCaches(): void {
   invalidateFavoritesCache()
   invalidatePlaylistCache()
-  console.log('🔄 Todos os caches invalidados')
 }
 
 /**
@@ -326,8 +317,6 @@ export function invalidateCatalogCaches(): void {
  * - Força recarga
  */
 export async function resetCatalog(): Promise<void> {
-  console.log('🔄 Resetando catálogo completamente...')
-  
   // 1. Limpar o banco
   await clearCatalog()
   
@@ -335,8 +324,7 @@ export async function resetCatalog(): Promise<void> {
   invalidateCatalogCaches()
   
   // 3. Verificar se limpou
-  const count = await getCatalogCount()
-  console.log(`✅ Reset concluído. Catálogo agora tem ${count} vídeos`)
+  console.debug('Catalog count after reset:', await getCatalogCount())
 }
 
 /**
@@ -344,8 +332,6 @@ export async function resetCatalog(): Promise<void> {
  * USO: Quando o usuário quer limpar todos os dados
  */
 export async function resetAllData(): Promise<void> {
-  console.log('🔄 Resetando TODOS os dados do app...')
-  
   const db = await getDB()
   
   // Limpar todas as stores
@@ -357,8 +343,6 @@ export async function resetAllData(): Promise<void> {
   
   // Invalidar todos os caches
   invalidateCatalogCaches()
-  
-  console.log('✅ Todos os dados foram resetados')
 }
 
 /**
@@ -408,8 +392,6 @@ export async function checkDatabaseHealth(): Promise<{
  * Útil para sincronizar com a API
  */
 export async function syncCatalog(videos: Video[]): Promise<void> {
-  console.log(`🔄 Sincronizando catálogo com ${videos.length} vídeos...`)
-  
   // Limpar catálogo existente
   await clearCatalog()
   
@@ -423,8 +405,6 @@ export async function syncCatalog(videos: Video[]): Promise<void> {
   
   // Invalidar caches
   invalidateCatalogCaches()
-  
-  console.log(`✅ Catálogo sincronizado: ${videos.length} vídeos`)
 }
 
 // ============================================================
@@ -436,18 +416,12 @@ export async function syncCatalog(videos: Video[]): Promise<void> {
  */
 export async function debugCatalog(): Promise<void> {
   const videos = await listCatalog()
-  console.log('📊 DEBUG CATÁLOGO:')
-  console.log(`  Total: ${videos.length} vídeos`)
-  
   if (videos.length > 0) {
-    console.log('  Últimos 5 vídeos:')
-    videos.slice(0, 5).forEach((v, i) => {
-      console.log(`    ${i+1}. ${v.title} (${v.id}) - ${new Date(v.addedAt).toLocaleString()}`)
-    })
+    console.debug('Catalog sample:', videos.slice(0, 5))
   }
   
   const health = await checkDatabaseHealth()
-  console.log('  Saúde do banco:', health)
+  console.debug('Database health:', health)
 }
 
 // ============================================================

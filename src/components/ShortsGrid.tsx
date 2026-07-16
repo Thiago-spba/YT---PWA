@@ -44,14 +44,14 @@ export default function ShortsGrid({ onOpen }: Props) {
               key={v.id}
               type="button"
               onClick={() => onOpen(v.id)}
-              className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-neutral-900"
+              className="group relative aspect-9/16 overflow-hidden rounded-lg bg-neutral-900"
             >
               <img
                 src={v.thumbnailUrl}
                 alt=""
                 className="h-full w-full object-cover transition-transform group-hover:scale-105"
               />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2 pt-8 text-left text-white">
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/80 to-transparent p-2 pt-8 text-white">
                 <p className="line-clamp-2 text-xs font-medium sm:text-sm">{v.title}</p>
                 <p className="truncate text-[11px] text-neutral-300 sm:text-xs">{v.channelTitle}</p>
               </div>
