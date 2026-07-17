@@ -202,9 +202,13 @@ export default function Shorts({ startId, onBack }: Props) {
   // na lista) — e rola até ele, já que o scroll-snap por padrão começa
   // no topo.
   useEffect(() => {
-    if (didInitRef.current || !loaded || feedShorts.length === 0) return
+    if (!loaded || feedShorts.length === 0) return
+    // startId vindo do card clicado tem prioridade — sempre navega até ele
+    const target = startId && feedShorts.some((v) => v.id === startId)
+      ? startId
+      : feedShorts[0].id
+    if (didInitRef.current && activeId === target) return
     didInitRef.current = true
-    const target = startId && feedShorts.some((v) => v.id === startId) ? startId : feedShorts[0].id
     setActiveId(target)
     requestAnimationFrame(() => {
       itemRefs.current.get(target)?.scrollIntoView({ block: 'start' })
@@ -292,8 +296,11 @@ export default function Shorts({ startId, onBack }: Props) {
       .catch(() => {})
 
     function load() {
-      playerRef.current?.loadVideoById(activeId!)
-      if (muted) playerRef.current?.mute()
+      try {
+        playerRef.current?.loadVideoById(activeId!)
+        if (muted) playerRef.current?.mute()
+        setPaused(false)
+      } catch { /* ignore */ }
     }
     if (readyRef.current) {
       load()
@@ -310,8 +317,11 @@ export default function Shorts({ startId, onBack }: Props) {
   }, [activeId])
 
   useEffect(() => {
-    if (muted) playerRef.current?.mute()
-    else playerRef.current?.unMute()
+    if (!readyRef.current || !playerRef.current) return
+    try {
+      if (muted) playerRef.current.mute()
+      else playerRef.current.unMute()
+    } catch { /* ignore */ }
   }, [muted])
 
   function registerRef(id: string, el: HTMLDivElement | null) {
@@ -347,11 +357,12 @@ export default function Shorts({ startId, onBack }: Props) {
   }
 
   function handleTogglePause() {
+    if (!readyRef.current || !playerRef.current) return
     if (paused) {
-      playerRef.current?.playVideo()
+      try { playerRef.current.playVideo() } catch { /* ignore */ }
       setPaused(false)
     } else {
-      playerRef.current?.pauseVideo()
+      try { playerRef.current.pauseVideo() } catch { /* ignore */ }
       setPaused(true)
     }
   }
@@ -431,31 +442,32 @@ export default function Shorts({ startId, onBack }: Props) {
       )}
 
       {hasApiKey() && (
-        <form onSubmit={handleSearch} className="sticky top-0 z-50 flex shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-900/80 p-2 pl-12 backdrop-blur-sm">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar vídeos curtos"
-            className="flex-1 rounded-full border border-neutral-700 bg-neutral-900 px-4 py-1.5 text-sm text-white placeholder-neutral-400 focus:border-violet-500 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={searching}
-            aria-label="Buscar"
-            title="Buscar"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
-          >
-            <SearchIcon />
-          </button>
-          {searchFeed !== null && (
+        <form onSubmit={handleSearch} className="sticky top-0 z-50 flex shrink-0 justify-center items-center gap-2 border-b border-neutral-800 bg-neutral-900/80 px-3 py-2 backdrop-blur-sm">
+          <div className="flex w-full max-w-sm items-center gap-2">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar shorts…"
+              className="flex-1 rounded-full border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:border-violet-500 focus:outline-none"
+            />
             <button
-              type="button"
-              onClick={handleExitSearch}
-              className="shrink-0 rounded-full px-3 py-1.5 text-sm text-neutral-300 hover:text-white"
+              type="submit"
+              disabled={searching}
+              aria-label="Buscar"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
             >
-              Voltar
+              <SearchIcon />
             </button>
-          )}
+            {searchFeed !== null && (
+              <button
+                type="button"
+                onClick={handleExitSearch}
+                className="shrink-0 text-xs text-neutral-400 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </form>
       )}
 
