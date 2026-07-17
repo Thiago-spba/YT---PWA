@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
+import { blockVideoId } from '../lib/storage'
 import { isFavorite, listCatalog, recordHistory, recordInterest, toggleFavorite } from '../lib/db'
 import { categorize } from '../lib/categories'
 import {
@@ -630,18 +631,36 @@ export default function PlayerHost({
           )}
 
           {videoError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/95 p-4 text-center text-white">
-              <p className="text-sm">
-                Este vídeo não está disponível (foi removido, ou o dono não permite assistir
-                fora do YouTube).
-              </p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded bg-violet-600 px-4 py-2 text-sm font-medium hover:bg-violet-700"
-              >
-                Voltar ao catálogo
-              </button>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/95 p-6 text-center text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-12 w-12 text-neutral-500">
+                <circle cx="12" cy="12" r="10" />
+                <path strokeLinecap="round" d="M12 8v4M12 16h.01" />
+              </svg>
+              <div>
+                <p className="font-medium">Vídeo indisponível</p>
+                <p className="mt-1 text-sm text-neutral-400">
+                  O dono desabilitou a reprodução fora do YouTube.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 w-full max-w-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (video) blockVideoId(video.id)
+                    onClose()
+                  }}
+                  className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium hover:bg-violet-700"
+                >
+                  Remover e voltar ao início
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl bg-neutral-800 px-4 py-2.5 text-sm font-medium hover:bg-neutral-700"
+                >
+                  Voltar sem remover
+                </button>
+              </div>
             </div>
           )}
         </div>

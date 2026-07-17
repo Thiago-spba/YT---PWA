@@ -15,6 +15,7 @@ import { expandSearchTerm } from '../lib/aiSearch'
 import { getSuggestions } from '../lib/searchSuggest'
 import { extractVideoId, getVideoById, getVideosByIds, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { QUOTA_EXCEEDED_MESSAGE } from '../lib/youtubeCache'
+import { blockVideoId, getBlockedIds } from '../lib/storage'
 import { RECOMMENDED_VIDEO_IDS } from '../config/recommendedVideos'
 import { HOME_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
@@ -535,9 +536,10 @@ export default function Home({ onSelect }: Props) {
   // ============================================================
   // 🔥 RENDER
   // ============================================================
+  const blockedIds = getBlockedIds()
   const catalogIds = new Set(catalogVideos.map((v) => v.id))
   const byId = new Map([...catalogVideos, ...apiVideos].map((v) => [v.id, v]))
-  const videos = order.map((id) => byId.get(id)!).filter(Boolean)
+  const videos = order.map((id) => byId.get(id)!).filter(Boolean).filter((v) => !blockedIds.has(v.id))
 
   // Debug em desenvolvimento
   useEffect(() => {
@@ -696,6 +698,11 @@ export default function Home({ onSelect }: Props) {
                 video={v}
                 onSelect={(video) => onSelect(video, videos.filter((sv) => sv.id !== video.id))}
                 onDelete={catalogIds.has(v.id) ? handleDeleteFromCatalog : undefined}
+                onBlock={!catalogIds.has(v.id) ? (video) => {
+                  blockVideoId(video.id)
+                  setApiVideos((curr) => curr.filter((av) => av.id !== video.id))
+                  seenIdsRef.current.delete(video.id)
+                } : undefined}
               />
             ))}
           </div>

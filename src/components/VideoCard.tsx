@@ -11,6 +11,7 @@ interface Props {
   variant?: 'grid' | 'list'
   /** Quando presente, mostra a lixeira para excluir o vídeo desta lista. */
   onDelete?: (video: Video) => void
+  onBlock?: (video: Video) => void
 }
 
 function PlusIcon() {
@@ -55,7 +56,7 @@ function channelInitials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-export default function VideoCard({ video, onSelect, variant = 'grid', onDelete }: Props) {
+export default function VideoCard({ video, onSelect, variant = 'grid', onDelete, onBlock }: Props) {
   const [inPlaylist, setInPlaylist] = useState(false)
   const [favorite, setFavorite] = useState(false)
 
@@ -142,6 +143,19 @@ export default function VideoCard({ video, onSelect, variant = 'grid', onDelete 
       >
         <StarIcon filled={favorite} />
       </button>
+      {onBlock && (
+        <button
+          type="button"
+          title="Remover do feed"
+          aria-label="Remover do feed"
+          onClick={(e) => { e.stopPropagation(); onBlock(video) }}
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-neutral-700"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
+            <path strokeLinecap="round" d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+      )}
       {onDelete && (
         <button
           type="button"

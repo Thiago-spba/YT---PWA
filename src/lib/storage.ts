@@ -120,3 +120,27 @@ export function addUsageMinutes(minutes: number): number {
   localStorage.setItem(KEYS.usageMinutes, String(updated))
   return updated
 }
+
+// ── IDs de vídeos bloqueados/removidos pelo usuário ──────────────────────
+const BLOCKED_KEY = 'yt-pwa:blocked-video-ids'
+
+export function getBlockedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(BLOCKED_KEY)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+export function blockVideoId(id: string): void {
+  try {
+    const ids = getBlockedIds()
+    ids.add(id)
+    localStorage.setItem(BLOCKED_KEY, JSON.stringify([...ids]))
+  } catch { /* ignore */ }
+}
+
+export function isVideoBlocked(id: string): boolean {
+  return getBlockedIds().has(id)
+}
