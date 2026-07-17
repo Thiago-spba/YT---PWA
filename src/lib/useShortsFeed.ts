@@ -31,6 +31,7 @@ export function useShortsFeed(): ShortsFeed {
   const pageTokensRef = useRef<Record<string, string | undefined>>({})
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
+  const shuffledRef = useRef<string[]>([...DISCOVERY_QUERIES])
 
   useEffect(() => {
     listCatalog()
@@ -84,27 +85,24 @@ export function useShortsFeed(): ShortsFeed {
   }
 
   // 🔥 Busca as 3 primeiras queries em paralelo para feed inicial rico
+  // Embaralha queries e salva para loadMore continuar de onde parou
+  function buildShuffledQueries(): string[] {
+    return [...DISCOVERY_QUERIES].sort(() => Math.random() - 0.5)
+  }
+
+  // Apenas 1 query no início para economizar cota — o loadMore traz o resto
   async function loadDiscovery() {
     setDiscoveryError(null)
+    const shuffled = buildShuffledQueries()
+    shuffledRef.current = shuffled
+    queryTurnRef.current = 1
     try {
-      const initialQueries = DISCOVERY_QUERIES.slice(0, 3)
-      const results = await Promise.allSettled(
-        initialQueries.map((q) => searchShortsPage(q))
-      )
-
-      const allVideos: Video[] = []
-      results.forEach((result, i) => {
-        if (result.status === 'fulfilled') {
-          const q = initialQueries[i]
-          pageTokensRef.current[q] = result.value.nextPageToken
-          allVideos.push(...result.value.videos)
-        }
-      })
-
-      queryTurnRef.current = 3
-      cachedDiscovery = allVideos
+      const q = shuffled[0]
+      const page = await searchShortsPage(q)
+      pageTokensRef.current[q] = page.nextPageToken
+      cachedDiscovery = page.videos
       cachedAt = Date.now()
-      mergeDiscovery(allVideos)
+      mergeDiscovery(page.videos)
     } catch (err) {
       setDiscoveryError(err instanceof YoutubeApiError ? err.message : 'Erro ao buscar vídeos.')
     }
@@ -112,10 +110,10 @@ export function useShortsFeed(): ShortsFeed {
 
   async function loadMore() {
     if (!hasApiKey() || loadingMore) return
-    if (exhaustedRef.current.size >= DISCOVERY_QUERIES.length) return
+    if (exhaustedRef.current.size >= shuffledRef.current.length) return
     let q: string | undefined
-    for (let i = 0; i < DISCOVERY_QUERIES.length; i++) {
-      const candidate = DISCOVERY_QUERIES[queryTurnRef.current % DISCOVERY_QUERIES.length]
+    for (let i = 0; i < shuffledRef.current.length; i++) {
+      const candidate = shuffledRef.current[queryTurnRef.current % shuffledRef.current.length]
       queryTurnRef.current += 1
       if (!exhaustedRef.current.has(candidate)) {
         q = candidate

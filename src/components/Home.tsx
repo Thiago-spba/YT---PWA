@@ -66,6 +66,7 @@ export default function Home({ onSelect }: Props) {
 
   // Rolagem infinita
   const seenIdsRef = useRef(new Set<string>())
+  const shuffledQueriesRef = useRef<string[]>([...QUERIES])
   const pageTokensRef = useRef<Record<string, string | undefined>>({})
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
@@ -249,21 +250,26 @@ export default function Home({ onSelect }: Props) {
         }
       }
 
-      // Embaralha para variar o feed a cada carregamento
+      // Embaralha para variar o feed a cada sessão
       const shuffled = [...QUERIES].sort(() => Math.random() - 0.5)
 
-      // Prioriza queries relacionadas ao historico do usuario
+      // Prioriza queries do histórico do usuário
       const historyTerms = historyRef.current.slice(0, 10).map((h) => h.title?.toLowerCase() ?? '')
       if (historyTerms.length > 0) {
         shuffled.sort((a, b) => {
-          const aMatch = historyTerms.some((t) => a.toLowerCase().includes(t) || t.includes(a.toLowerCase())) ? -1 : 0
-          const bMatch = historyTerms.some((t) => b.toLowerCase().includes(t) || t.includes(b.toLowerCase())) ? -1 : 0
-          return aMatch - bMatch
+          const aHit = historyTerms.some((t) => a.toLowerCase().includes(t) || t.includes(a.toLowerCase()))
+          const bHit = historyTerms.some((t) => b.toLowerCase().includes(t) || t.includes(b.toLowerCase()))
+          return (aHit ? -1 : 0) - (bHit ? -1 : 0)
         })
       }
 
-      // Busca 4 queries em paralelo para feed inicial rico e variado
-      const initialQueries = shuffled.slice(0, 4)
+      // Salva ordem embaralhada para o loadMore continuar de onde parou
+      shuffledQueriesRef.current = shuffled
+
+      // Apenas 2 queries no início para não estourar cota
+      const initialQueries = shuffled.slice(0, 2)
+      queryTurnRef.current = 2
+
       const results = await Promise.allSettled(
         initialQueries.map((q) => searchVideosPage(q, undefined, 'date'))
       )
@@ -282,7 +288,6 @@ export default function Home({ onSelect }: Props) {
         }
       })
 
-      queryTurnRef.current = 4
       cachedVideos = allVideos
       cachedAt = Date.now()
       return allVideos
@@ -296,10 +301,10 @@ export default function Home({ onSelect }: Props) {
   // 🔥 LOAD MORE
   // ============================================================
   async function loadMore() {
-    if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= QUERIES.length) return
+    if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= shuffledQueriesRef.current.length) return
     let query: string | undefined
     for (let i = 0; i < QUERIES.length; i++) {
-      const candidate = QUERIES[queryTurnRef.current % QUERIES.length]
+      const candidate = shuffledQueriesRef.current[queryTurnRef.current % shuffledQueriesRef.current.length]
       queryTurnRef.current += 1
       if (!exhaustedRef.current.has(candidate)) {
         query = candidate

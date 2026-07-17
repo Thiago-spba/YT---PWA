@@ -1,53 +1,41 @@
 /**
  * Queries de descoberta para Home e Shorts.
- * Divididas em dois grupos:
- * - DISCOVERY_QUERIES: usadas nos Shorts (vídeos curtos)
- * - HOME_QUERIES: usadas na Home (vídeos longos/variados)
- *
- * Canais fixos adicionados: Naruhodo, Tupã, Henrique Caldeira,
- * Rodrigo Silva, pregações evangélicas e conteúdo acadêmico.
+ * Mantidas separadas para cada contexto poder ter seu próprio nicho.
+ * Ordem embaralhada a cada sessão — veja Home.tsx e useShortsFeed.ts.
  */
 
+// Usadas nos Shorts (vídeos curtos)
 export const DISCOVERY_QUERIES = [
-  // Atualidades
   'notícias Brasil hoje',
   'notícias mundo resumo',
-  // Tecnologia
   'tecnologia novidades 2025',
-  'inteligência artificial explicação',
-  // Educação / Ciência
   'curiosidades ciência fatos',
   'matemática explicação rápida',
   'engenharia da computação',
-  // Canais acadêmicos conhecidos
   'Naruhodo podcast',
-  'Tupã ciência',
   'Henrique Caldeira história',
-  // Outros
-  'curso técnico profissionalizante',
   'Rodrigo Silva motivação',
+  'pregação evangélica reflexão',
+  'curso técnico profissionalizante',
+  'inteligência artificial explicação',
 ]
 
+// Usadas na Home (vídeos longos e variados)
 export const HOME_QUERIES = [
-  // Atualidades
   'notícias Brasil hoje',
   'notícias mundo 2025',
-  // Tecnologia & Engenharia
   'tecnologia novidades 2025',
   'inteligência artificial tutorial',
   'engenharia da computação aula',
   'programação dicas',
-  // Educação & Ciência
   'curiosidades ciência',
   'matemática aula completa',
-  'física química biologia aula',
   'história do Brasil aula',
-  // Canais acadêmicos
   'Naruhodo',
-  'canal Tupã',
+  'canal Tupã ciência',
   'Henrique Caldeira doutor história',
   'Rodrigo Silva',
-  // Pregações
   'pregação evangélica reflexão',
   'pregação motivacional fé',
+  'física química biologia aula',
 ]
