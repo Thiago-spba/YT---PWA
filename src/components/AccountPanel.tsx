@@ -273,22 +273,27 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
         onClick={() => (open ? closePanel() : setOpen(true))}
         aria-label="Configurações"
         title="Configurações"
-        className="fixed bottom-4 left-4 z-[45] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-violet-600 text-white shadow-lg hover:bg-violet-700"
+        className={`fixed bottom-4 left-4 z-[100] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full text-white shadow-xl transition-transform hover:scale-105 active:scale-95 ${
+          open ? 'ring-4 ring-violet-400 ring-offset-2 ring-offset-black' : ''
+        } ${profile ? 'bg-transparent' : 'bg-violet-600 hover:bg-violet-700'}`}
       >
         {profile ? (
-          <img src={profile.picture} alt={profile.name} className="h-full w-full object-cover" />
+          <img src={profile.picture} alt={profile.name} className="h-full w-full rounded-full object-cover" />
         ) : (
           <svg viewBox="0 0 24 24" fill="currentColor" className="h-7 w-7">
             <path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.5c-3.3 0-9.8 1.6-9.8 4.9v2.4h19.6v-2.4c0-3.3-6.5-4.9-9.8-4.9z" />
           </svg>
         )}
+        {profile && (
+          <span className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full border-2 border-black bg-green-400" />
+        )}
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[44] bg-black/30" onClick={closePanel}>
+        <div className="fixed inset-0 z-[99] bg-black/50 backdrop-blur-sm" onClick={closePanel}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="fixed bottom-20 left-4 z-[45] max-h-[70vh] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-xl bg-white p-4 shadow-xl dark:bg-neutral-900"
+            className="fixed bottom-20 left-4 z-[100] max-h-[75vh] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl dark:bg-neutral-900"
           >
             {needsPinToView ? (
               <form onSubmit={handleUnlock} className="flex flex-col gap-3">
@@ -376,12 +381,23 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
                   {googleConnected && (
                     <div className="mt-3 space-y-3">
                       <div>
-                        <h3 className="mb-1 text-xs font-semibold uppercase text-neutral-500">
+                        <h3 className="mb-2 text-xs font-semibold uppercase text-neutral-500">
                           Inscrições ({subscriptions.length})
                         </h3>
-                        <p className="max-h-16 overflow-y-auto text-sm text-neutral-500 dark:text-neutral-400">
-                          {subscriptions.map((s) => s.title).join(', ') || 'Nenhuma encontrada.'}
-                        </p>
+                        {subscriptions.length > 0 ? (
+                          <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+                            {subscriptions.map((s) => (
+                              <span
+                                key={s.channelId}
+                                className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+                              >
+                                {s.title}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-neutral-400">Nenhuma encontrada.</p>
+                        )}
                       </div>
 
                       <div>
@@ -392,11 +408,11 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
                           {playlists.length > 0 && (
                             <button
                               type="button"
-                              onClick={handleImportAll}
+                              onClick={async () => { setGoogleError(null); await handleImportAll() }}
                               disabled={googleLoading}
-                              className="text-xs font-medium text-violet-600 underline hover:text-violet-700 disabled:opacity-50 dark:text-violet-400"
+                              className="flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700 hover:bg-violet-200 disabled:opacity-50 dark:bg-violet-950 dark:text-violet-300"
                             >
-                              Importar tudo de uma vez
+                              {googleLoading ? 'Importando…' : '⬇ Importar tudo'}
                             </button>
                           )}
                         </div>
