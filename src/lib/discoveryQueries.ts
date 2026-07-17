@@ -1,21 +1,53 @@
 /**
- * Consultas fixas usadas para popular os feeds de descoberta (Início e
- * Shorts) sem depender de vídeos importados — ficam só aqui, num lugar
- * único, pra Início e Shorts nunca saírem de sincronia sobre o que
- * "o feed padrão" mostra.
+ * Queries de descoberta para Home e Shorts.
+ * Divididas em dois grupos:
+ * - DISCOVERY_QUERIES: usadas nos Shorts (vídeos curtos)
+ * - HOME_QUERIES: usadas na Home (vídeos longos/variados)
  *
- * Nicho: Atualidades, Tecnologia, Educação, Engenharia e Curiosidades.
- * Cada entrada vira uma query `search?type=video&videoDuration=short`
- * no YouTube Data API v3 (via /api/youtube). Mantenha ≤ 6–7 queries
- * para não estourar cota/rate-limit no rodízio de `loadMore`.
+ * Canais fixos adicionados: Naruhodo, Tupã, Henrique Caldeira,
+ * Rodrigo Silva, pregações evangélicas e conteúdo acadêmico.
  */
+
 export const DISCOVERY_QUERIES = [
-  'notícias Brasil hoje',           // Atualidades nacionais
-  'notícias mundo resumo',          // Atualidades globais
-  'tecnologia novidades 2024',      // Tecnologia
-  'educação dicas estudo',          // Educação
-  'matemática explicação rápida',   // Matemática
-  'engenharia da computação',       // Engenharia da computação
-  'curso técnico profissionalizante', // Ensino técnico profissionalizante
-  'curiosidades ciência fatos',     // Curiosidades (ciência/geral)
+  // Atualidades
+  'notícias Brasil hoje',
+  'notícias mundo resumo',
+  // Tecnologia
+  'tecnologia novidades 2025',
+  'inteligência artificial explicação',
+  // Educação / Ciência
+  'curiosidades ciência fatos',
+  'matemática explicação rápida',
+  'engenharia da computação',
+  // Canais acadêmicos conhecidos
+  'Naruhodo podcast',
+  'Tupã ciência',
+  'Henrique Caldeira história',
+  // Outros
+  'curso técnico profissionalizante',
+  'Rodrigo Silva motivação',
+]
+
+export const HOME_QUERIES = [
+  // Atualidades
+  'notícias Brasil hoje',
+  'notícias mundo 2025',
+  // Tecnologia & Engenharia
+  'tecnologia novidades 2025',
+  'inteligência artificial tutorial',
+  'engenharia da computação aula',
+  'programação dicas',
+  // Educação & Ciência
+  'curiosidades ciência',
+  'matemática aula completa',
+  'física química biologia aula',
+  'história do Brasil aula',
+  // Canais acadêmicos
+  'Naruhodo',
+  'canal Tupã',
+  'Henrique Caldeira doutor história',
+  'Rodrigo Silva',
+  // Pregações
+  'pregação evangélica reflexão',
+  'pregação motivacional fé',
 ]

@@ -180,6 +180,8 @@ export default function Shorts({ startId, onBack }: Props) {
   const [searchLoadingMore, setSearchLoadingMore] = useState(false)
 
   const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const feedShortsRef = useRef<typeof feedShorts>([])
+  const feedItemRefsRef = useRef(itemRefs.current)
   const playerContainerRef = useRef<HTMLDivElement | null>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const readyRef = useRef(false)
@@ -190,6 +192,9 @@ export default function Shorts({ startId, onBack }: Props) {
   const didInitRef = useRef(false)
 
   const shorts = searchFeed ?? feedShorts
+  // Mantém ref atualizada para uso dentro dos closures do player
+  feedShortsRef.current = feedShorts
+  feedItemRefsRef.current = itemRefs.current
   const loadingMore = searchFeed !== null ? searchLoadingMore : feedLoadingMore
 
   // Define o item ativo inicial uma única vez, assim que o feed chegar
@@ -245,9 +250,22 @@ export default function Shorts({ startId, onBack }: Props) {
             playerRef.current?.mute()
           },
           onStateChange: (e) => {
-            // 0 = terminou: reinicia o mesmo short (efeito "loop").
-            if (e.data === 0) { setPaused(false); playerRef.current?.playVideo() }
-            // 1 = playing, 2 = paused
+            // 0 = terminou: avança para o próximo short automaticamente
+            if (e.data === 0) {
+              setPaused(false)
+              setActiveId((current) => {
+                const feed = feedShortsRef.current
+                const idx = feed.findIndex((v) => v.id === current)
+                const next = feed[idx + 1]
+                if (next) {
+                  feedItemRefsRef.current.get(next.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  return next.id
+                }
+                // sem próximo: reinicia o atual
+                playerRef.current?.playVideo()
+                return current
+              })
+            }
             if (e.data === 1) setPaused(false)
             if (e.data === 2) setPaused(true)
           },

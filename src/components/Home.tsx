@@ -16,7 +16,7 @@ import { getSuggestions } from '../lib/searchSuggest'
 import { extractVideoId, getVideoById, getVideosByIds, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { QUOTA_EXCEEDED_MESSAGE } from '../lib/youtubeCache'
 import { RECOMMENDED_VIDEO_IDS } from '../config/recommendedVideos'
-import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
+import { HOME_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
 interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
@@ -248,14 +248,44 @@ export default function Home({ onSelect }: Props) {
           return recommended
         }
       }
-      
-      const q = QUERIES[0]
-      const page = await searchVideosPage(q, undefined, 'date')
-      pageTokensRef.current[q] = page.nextPageToken
-      page.videos.forEach((v) => seenIdsRef.current.add(v.id))
-      cachedVideos = page.videos
+
+      // Embaralha para variar o feed a cada carregamento
+      const shuffled = [...QUERIES].sort(() => Math.random() - 0.5)
+
+      // Prioriza queries relacionadas ao historico do usuario
+      const historyTerms = historyRef.current.slice(0, 10).map((h) => h.title?.toLowerCase() ?? '')
+      if (historyTerms.length > 0) {
+        shuffled.sort((a, b) => {
+          const aMatch = historyTerms.some((t) => a.toLowerCase().includes(t) || t.includes(a.toLowerCase())) ? -1 : 0
+          const bMatch = historyTerms.some((t) => b.toLowerCase().includes(t) || t.includes(b.toLowerCase())) ? -1 : 0
+          return aMatch - bMatch
+        })
+      }
+
+      // Busca 4 queries em paralelo para feed inicial rico e variado
+      const initialQueries = shuffled.slice(0, 4)
+      const results = await Promise.allSettled(
+        initialQueries.map((q) => searchVideosPage(q, undefined, 'date'))
+      )
+
+      const allVideos: Video[] = []
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') {
+          const q = initialQueries[i]
+          pageTokensRef.current[q] = result.value.nextPageToken
+          result.value.videos.forEach((v) => {
+            if (!seenIdsRef.current.has(v.id)) {
+              seenIdsRef.current.add(v.id)
+              allVideos.push(v)
+            }
+          })
+        }
+      })
+
+      queryTurnRef.current = 4
+      cachedVideos = allVideos
       cachedAt = Date.now()
-      return page.videos
+      return allVideos
     } catch (err) {
       setError(err instanceof YoutubeApiError ? err.message : null)
       return null
