@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { useShortsFeed } from '../lib/useShortsFeed'
+import type { ShortsFeed } from '../lib/useShortsFeed'
 
 interface Props {
   onOpen: (videoId: string) => void
+  sharedFeed: ShortsFeed
 }
 
-export default function ShortsGrid({ onOpen }: Props) {
-  const { shorts, loaded, loadingMore, discoveryError, loadMore, retryDiscovery } = useShortsFeed()
+export default function ShortsGrid({ onOpen, sharedFeed }: Props) {
+  const { shorts, loaded, loadingMore, discoveryError, loadMore, retryDiscovery } = sharedFeed
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {

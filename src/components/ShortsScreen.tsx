@@ -1,23 +1,31 @@
 import { useState } from 'react'
 import Shorts from './Shorts'
 import ShortsGrid from './ShortsGrid'
+import { useShortsFeed } from '../lib/useShortsFeed'
 
 /**
- * Alterna entre a grade de descoberta (miniaturas) e o modo imersivo
- * (1 vídeo por tela, rolagem vertical) — os dois usam o mesmo hook de
- * dados (`useShortsFeed`), então trocar de um para o outro não refaz
- * nenhuma busca já feita.
+ * Chama useShortsFeed UMA única vez e compartilha o feed entre
+ * ShortsGrid (grade) e Shorts (imersivo) — assim o startId sempre
+ * encontra o vídeo certo porque os dois usam exatamente a mesma lista.
  */
 export default function ShortsScreen() {
   const [startId, setStartId] = useState<string | undefined>(undefined)
   const [mode, setMode] = useState<'grid' | 'immersive'>('grid')
+  const feed = useShortsFeed()
 
   if (mode === 'immersive') {
-    return <Shorts startId={startId} onBack={() => setMode('grid')} />
+    return (
+      <Shorts
+        startId={startId}
+        sharedFeed={feed}
+        onBack={() => setMode('grid')}
+      />
+    )
   }
 
   return (
     <ShortsGrid
+      sharedFeed={feed}
       onOpen={(id) => {
         setStartId(id)
         setMode('immersive')

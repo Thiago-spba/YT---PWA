@@ -4,7 +4,7 @@ import { isFavorite, recordHistory, recordInterest, removeFromCatalog, toggleFav
 import { categorize } from '../lib/categories'
 import { hasApiKey, searchShortsPage, YoutubeApiError } from '../lib/youtube'
 import { loadYouTubeApi, type YTPlayer } from '../lib/youtubePlayer'
-import { useShortsFeed } from '../lib/useShortsFeed'
+import { useShortsFeed, type ShortsFeed } from '../lib/useShortsFeed'
 
 function SearchIcon() {
   return (
@@ -150,15 +150,17 @@ function ShortThumb({ video, isActive, muted, registerRef, onVisible }: ThumbPro
 interface Props {
   startId?: string
   onBack?: () => void
+  sharedFeed?: ShortsFeed
 }
 
-export default function Shorts({ startId, onBack }: Props) {
+export default function Shorts({ startId, onBack, sharedFeed }: Props) {
   // Feed geral (catálogo + descoberta, vindo do hook compartilhado com a
   // grade) e resultado de busca ficam separados — `shorts` (abaixo) é
   // sempre "o que está sendo exibido agora", trocando sozinho entre os
   // dois. Isso deixa a busca usar exatamente a mesma rolagem vertical
   // com favoritar/mudo/lixeira do feed normal, em vez de uma grade à
   // parte sem esses controles.
+  const ownFeed = useShortsFeed()
   const {
     shorts: feedShorts,
     loaded,
@@ -168,7 +170,7 @@ export default function Shorts({ startId, onBack }: Props) {
     loadMore: loadMoreFeed,
     retryDiscovery,
     removeFromFeed,
-  } = useShortsFeed()
+  } = sharedFeed ?? ownFeed
   const [searchFeed, setSearchFeed] = useState<Video[] | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [muted, setMuted] = useState(true)
