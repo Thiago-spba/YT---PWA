@@ -283,7 +283,7 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
         onClick={() => (open ? closePanel() : setOpen(true))}
         aria-label="Configurações"
         title="Configurações"
-        className={`fixed right-3 top-3 z-[100] flex h-11 w-11 items-center justify-center overflow-hidden rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 ${
+        className={`fixed right-3 top-3 z-[55] flex h-11 w-11 items-center justify-center overflow-hidden rounded-full shadow-lg transition-all hover:scale-105 active:scale-95 ${
           open ? 'ring-2 ring-violet-400 ring-offset-1 ring-offset-black' : ''
         } ${profile ? 'bg-transparent' : 'bg-violet-600 hover:bg-violet-700 text-white'}`}
       >
@@ -300,14 +300,14 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[99] bg-black/60 backdrop-blur-sm" onClick={closePanel}>
+        <div className="fixed inset-0 z-[54] bg-black/60 backdrop-blur-sm" onClick={closePanel}>
           {/* Painel — slide de baixo para cima no mobile, lateral no desktop */}
           <div
             onClick={(e) => e.stopPropagation()}
-            className="fixed inset-x-0 bottom-0 z-[100] flex max-h-[85vh] flex-col rounded-t-2xl bg-white shadow-2xl dark:bg-neutral-900 sm:inset-x-auto sm:right-4 sm:top-16 sm:bottom-auto sm:w-96 sm:rounded-2xl"
+            className="fixed inset-x-0 bottom-0 z-[56] flex max-h-[85vh] flex-col rounded-t-2xl animate-slide-up bg-white shadow-2xl dark:bg-neutral-900 sm:inset-x-auto sm:right-4 sm:top-14 sm:bottom-auto sm:w-96 sm:rounded-2xl"
           >
             {/* Header com perfil */}
-            <div className="flex items-center gap-3 border-b border-neutral-200 p-4 dark:border-neutral-700">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 p-4 dark:border-neutral-700">
               {profile ? (
                 <>
                   <img src={profile.picture} alt={profile.name} className="h-10 w-10 rounded-full" />
@@ -355,7 +355,7 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
             ) : (
               <>
                 {/* Abas */}
-                <div className="flex border-b border-neutral-200 dark:border-neutral-700">
+                <div className="flex shrink-0 border-b border-neutral-200 dark:border-neutral-700">
                   {(['conta', 'importar', 'config'] as Tab[]).map((t) => (
                     <button
                       key={t}

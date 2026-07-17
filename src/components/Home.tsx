@@ -26,7 +26,7 @@ interface Props {
 let cachedVideos: Video[] | null = null
 let cachedAt = 0
 const CACHE_TTL_MS = 5 * 60 * 1000
-let forceRefreshCache = false // 🔥 NOVO: flag para forçar refresh
+let forceRefreshCache = true // Sempre refresh ao montar pela primeira vez
 
 function shuffle<T>(items: T[]): T[] {
   const copy = [...items]

@@ -10,7 +10,6 @@ import type { Video } from './types'
 import TopBar from './components/TopBar'
 import Home from './components/Home'
 import Footer from './components/Footer'
-import ThemeToggle from './components/ThemeToggle'
 import type { PlayerMode } from './components/PlayerHost'
 
 // Code splitting (item 7): só a tela inicial (Home) e o que aparece em
@@ -133,7 +132,6 @@ function App() {
       <Suspense fallback={null}>
         <AccountPanel onCatalogChanged={() => setCatalogVersion((v) => v + 1)} />
       </Suspense>
-      <ThemeToggle />
       {playing && (
         <Suspense fallback={null}>
           <PlayerHost

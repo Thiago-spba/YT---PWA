@@ -6,7 +6,7 @@ import { DISCOVERY_QUERIES } from './discoveryQueries'
 
 let cachedDiscovery: Video[] | null = null
 let cachedAt = 0
-const CACHE_TTL_MS = 5 * 60 * 1000
+const CACHE_TTL_MS = 0 // Sempre busca vídeos novos ao montar
 const checkedIdsThisSession = new Set<string>()
 
 export interface ShortsFeed {
