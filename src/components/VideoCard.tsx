@@ -137,7 +137,7 @@ export default function VideoCard({ video, onSelect, variant = 'grid', onDelete,
         onClick={handleToggleFavorite}
         title={favorite ? 'Remover dos favoritos' : 'Favoritar'}
         aria-label={favorite ? 'Remover dos favoritos' : 'Favoritar'}
-        className={`flex h-6 w-6 items-center justify-center rounded-full text-white ${
+        className={`flex h-12 w-12 items-center justify-center rounded-full text-white ${
           favorite ? 'bg-violet-600' : 'bg-black/60 hover:bg-black/80'
         }`}
       >
@@ -149,7 +149,7 @@ export default function VideoCard({ video, onSelect, variant = 'grid', onDelete,
           title="Remover do feed"
           aria-label="Remover do feed"
           onClick={(e) => { e.stopPropagation(); onBlock(video) }}
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-neutral-700"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white hover:bg-neutral-700"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5">
             <path strokeLinecap="round" d="M18 6 6 18M6 6l12 12" />
@@ -162,7 +162,7 @@ export default function VideoCard({ video, onSelect, variant = 'grid', onDelete,
           onClick={handleDelete}
           title="Excluir desta lista"
           aria-label="Excluir desta lista"
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-600"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white hover:bg-red-600"
         >
           <TrashIcon />
         </button>

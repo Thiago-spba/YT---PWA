@@ -643,20 +643,22 @@ export default function PlayerHost({
                 </p>
               </div>
               <div className="flex flex-col gap-2 w-full max-w-xs">
+                {/* Primário: sólido */}
                 <button
                   type="button"
                   onClick={() => {
                     if (video) blockVideoId(video.id)
                     onClose()
                   }}
-                  className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium hover:bg-violet-700"
+                  className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 active:scale-95 transition-transform"
                 >
                   Remover e voltar ao início
                 </button>
+                {/* Secundário: outline */}
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl bg-neutral-800 px-4 py-2.5 text-sm font-medium hover:bg-neutral-700"
+                  className="rounded-xl border border-neutral-600 bg-transparent px-4 py-2.5 text-sm font-medium text-neutral-300 hover:border-neutral-400 hover:text-white active:scale-95 transition-transform"
                 >
                   Voltar sem remover
                 </button>

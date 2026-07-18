@@ -336,22 +336,38 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
             </div>
 
             {needsPinToView ? (
-              <form onSubmit={handleUnlock} className="flex flex-col gap-3 p-4">
-                <p className="text-sm text-neutral-600 dark:text-neutral-300">Digite o PIN para acessar as configurações.</p>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  autoFocus
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  placeholder="PIN"
-                  className="rounded-xl border border-neutral-300 px-4 py-2.5 text-sm dark:border-neutral-600 dark:bg-neutral-800 dark:text-white"
-                />
-                <button type="submit" className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-700">
-                  Entrar
-                </button>
-                {message && <p className="text-sm text-red-500">{message}</p>}
-              </form>
+              /* Modal de PIN centralizado na tela */
+              <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4" onClick={closePanel}>
+                <form
+                  onSubmit={handleUnlock}
+                  className="flex w-full max-w-sm flex-col gap-4 rounded-2xl bg-white p-6 shadow-2xl dark:bg-neutral-800"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="text-center">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6 text-violet-600 dark:text-violet-300">
+                        <rect x="3" y="11" width="18" height="11" rx="2" />
+                        <path strokeLinecap="round" d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </div>
+                    <p className="font-semibold text-neutral-900 dark:text-white">Controle Parental</p>
+                    <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Digite o PIN para acessar as configurações.</p>
+                  </div>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    autoFocus
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    placeholder="••••"
+                    className="rounded-xl border border-neutral-300 px-4 py-3 text-center text-lg tracking-widest focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-700 dark:text-white"
+                  />
+                  {message && <p className="text-center text-sm text-red-500">{message}</p>}
+                  <button type="submit" className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition-transform hover:bg-violet-700 active:scale-95">
+                    Entrar
+                  </button>
+                </form>
+              </div>
             ) : (
               <>
                 {/* Abas */}

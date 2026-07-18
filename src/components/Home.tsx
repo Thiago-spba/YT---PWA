@@ -635,7 +635,7 @@ export default function Home({ onSelect }: Props) {
             <p className="text-sm text-neutral-500 dark:text-neutral-400">Nenhum vídeo encontrado.</p>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-5">
                 {searchResults.map((v) => (
                   <VideoCard key={v.id} video={v} onSelect={onSelect} />
                 ))}
@@ -691,7 +691,7 @@ export default function Home({ onSelect }: Props) {
       
       {videos.length > 0 && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-5">
             {videos.map((v) => (
               <VideoCard
                 key={v.id}
