@@ -21,6 +21,7 @@ import { HOME_QUERIES as QUERIES } from '../lib/discoveryQueries'
 
 interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
+  onSaveToCollection?: (video: Video) => void
 }
 
 // Cache curto em memória
@@ -55,7 +56,7 @@ function RefreshIcon() {
   )
 }
 
-export default function Home({ onSelect }: Props) {
+export default function Home({ onSelect, onSaveToCollection }: Props) {
   // Catálogo salvo e vídeos da API
   const [catalogVideos, setCatalogVideos] = useState<Video[]>([])
   const [apiVideos, setApiVideos] = useState<Video[]>([])
@@ -703,6 +704,7 @@ export default function Home({ onSelect }: Props) {
                   setApiVideos((curr) => curr.filter((av) => av.id !== video.id))
                   seenIdsRef.current.delete(video.id)
                 } : undefined}
+                onSaveToCollection={onSaveToCollection}
               />
             ))}
           </div>

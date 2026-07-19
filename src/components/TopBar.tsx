@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { getStoredTheme, setTheme, type Theme } from '../lib/theme'
 
-type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts'
+type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts' | 'collections'
 
 interface Props {
   view: View
@@ -62,6 +62,14 @@ function ShortsIcon() {
   )
 }
 
+function CollectionsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5L5 21V5z" />
+    </svg>
+  )
+}
+
 function ThemeIcon({ theme }: { theme: Theme }) {
   if (theme === 'light') return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -89,6 +97,7 @@ const items: { key: View; label: string; icon: () => React.JSX.Element }[] = [
   { key: 'favorites', label: 'Favoritos', icon: FavoritesIcon },
   { key: 'playlist', label: 'Playlist', icon: PlaylistIcon },
   { key: 'history', label: 'Histórico', icon: HistoryIcon },
+  { key: 'collections', label: 'Coleções', icon: CollectionsIcon },
 ]
 
 const themeOrder: Theme[] = ['system', 'light', 'dark']

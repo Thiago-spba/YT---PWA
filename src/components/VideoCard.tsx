@@ -12,6 +12,7 @@ interface Props {
   /** Quando presente, mostra a lixeira para excluir o vídeo desta lista. */
   onDelete?: (video: Video) => void
   onBlock?: (video: Video) => void
+  onSaveToCollection?: (video: Video) => void
 }
 
 function PlusIcon() {
@@ -56,7 +57,7 @@ function channelInitials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase()
 }
 
-export default function VideoCard({ video, onSelect, variant = 'grid', onDelete, onBlock }: Props) {
+export default function VideoCard({ video, onSelect, variant = 'grid', onDelete, onBlock, onSaveToCollection }: Props) {
   const [inPlaylist, setInPlaylist] = useState(false)
   const [favorite, setFavorite] = useState(false)
 
@@ -143,6 +144,19 @@ export default function VideoCard({ video, onSelect, variant = 'grid', onDelete,
       >
         <StarIcon filled={favorite} />
       </button>
+      {onSaveToCollection && (
+        <button
+          type="button"
+          title="Salvar em coleção"
+          aria-label="Salvar em coleção"
+          onClick={(e) => { e.stopPropagation(); onSaveToCollection(video) }}
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white hover:bg-violet-600"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-7-3.5L5 21V5z" />
+          </svg>
+        </button>
+      )}
       {onBlock && (
         <button
           type="button"

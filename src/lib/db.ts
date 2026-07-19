@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { CatalogEntry, HistoryEntry, InterestEntry, PlaylistEntry, Video } from '../types'
+import type { CatalogEntry, Collection, CollectionEntry, HistoryEntry, InterestEntry, PlaylistEntry, Video } from '../types'
 
 interface YtPwaDB extends DBSchema {
   catalog: { key: string; value: CatalogEntry }
@@ -7,13 +7,15 @@ interface YtPwaDB extends DBSchema {
   history: { key: string; value: HistoryEntry }
   playlist: { key: string; value: PlaylistEntry }
   interests: { key: string; value: InterestEntry }
+  collections: { key: string; value: Collection }
+  collectionEntries: { key: string; value: CollectionEntry; indexes: { 'by-collection': string } }
 }
 
 let dbPromise: Promise<IDBPDatabase<YtPwaDB>> | null = null
 
 function getDB() {
   if (!dbPromise) {
-    dbPromise = openDB<YtPwaDB>('yt-pwa', 3, {
+    dbPromise = openDB<YtPwaDB>('yt-pwa', 4, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           db.createObjectStore('catalog', { keyPath: 'id' })
@@ -25,6 +27,11 @@ function getDB() {
         }
         if (oldVersion < 3) {
           db.createObjectStore('interests', { keyPath: 'category' })
+        }
+        if (oldVersion < 4) {
+          db.createObjectStore('collections', { keyPath: 'id' })
+          const ce = db.createObjectStore('collectionEntries', { keyPath: 'id' })
+          ce.createIndex('by-collection', 'collectionId')
         }
       },
     }).catch((err) => {
@@ -446,4 +453,57 @@ export async function updateCatalogVideoFlags(
   await tx.done
   // Invalida caches após atualizar
   invalidateCatalogCaches()
+}
+// ── COLEÇÕES ──────────────────────────────────────────────────────────────
+
+export async function listCollections(): Promise<Collection[]> {
+  const db = await getDB()
+  return db.getAll('collections')
+}
+
+export async function createCollection(name: string): Promise<Collection> {
+  const db = await getDB()
+  const col: Collection = { id: crypto.randomUUID(), name: name.trim(), createdAt: Date.now(), updatedAt: Date.now() }
+  await db.put('collections', col)
+  return col
+}
+
+export async function updateCollectionName(id: string, name: string): Promise<void> {
+  const db = await getDB()
+  const col = await db.get('collections', id)
+  if (!col) return
+  await db.put('collections', { ...col, name: name.trim(), updatedAt: Date.now() })
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('collections', id)
+  // Remove todos os vídeos da coleção
+  const all = await db.getAllFromIndex('collectionEntries', 'by-collection', id)
+  const tx = db.transaction('collectionEntries', 'readwrite')
+  await Promise.all(all.map((e) => tx.store.delete(e.id)))
+  await tx.done
+}
+
+export async function addToCollection(collectionId: string, video: Video): Promise<void> {
+  const db = await getDB()
+  // id = collectionId:videoId para suportar o mesmo vídeo em múltiplas coleções
+  const entry: CollectionEntry = { ...video, id: `${collectionId}:${video.id}`, collectionId, addedAt: Date.now() }
+  await db.put('collectionEntries', entry)
+}
+
+export async function removeFromCollection(collectionId: string, videoId: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('collectionEntries', `${collectionId}:${videoId}`)
+}
+
+export async function listCollectionVideos(collectionId: string): Promise<CollectionEntry[]> {
+  const db = await getDB()
+  return db.getAllFromIndex('collectionEntries', 'by-collection', collectionId)
+}
+
+export async function isInCollection(collectionId: string, videoId: string): Promise<boolean> {
+  const db = await getDB()
+  const entry = await db.get('collectionEntries', `${collectionId}:${videoId}`)
+  return !!entry
 }

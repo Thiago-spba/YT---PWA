@@ -40,3 +40,15 @@ export interface VideoProgress {
 export interface VideoProgressDoc extends Omit<VideoProgress, 'updatedAt'> {
   updatedAt: Date | { toDate: () => Date } | number
 }
+
+export interface Collection {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface CollectionEntry extends Video {
+  collectionId: string
+  addedAt: number
+}
