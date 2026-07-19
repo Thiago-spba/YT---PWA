@@ -26,6 +26,8 @@ const History = lazy(() => import('./components/History'))
 const ShortsScreen = lazy(() => import('./components/ShortsScreen'))
 const PlayerHost = lazy(() => import('./components/PlayerHost'))
 const AccountPanel = lazy(() => import('./components/AccountPanel'))
+const Collections = lazy(() => import('./components/Collections'))
+const SaveToCollectionModal = lazy(() => import('./components/SaveToCollectionModal'))
 
 function ScreenFallback() {
   return (
@@ -33,7 +35,7 @@ function ScreenFallback() {
   )
 }
 
-type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts'
+type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts' | 'collections'
 
 function limitReachedNow(): boolean {
   if (!isParentalControlEnabled()) return false
@@ -48,6 +50,7 @@ function App() {
   const [playerMode, setPlayerMode] = useState<PlayerMode>('expanded')
   const [queue, setQueue] = useState<Video[]>([])
   const [timeUp, setTimeUp] = useState(limitReachedNow())
+  const [saveModalVideo, setSaveModalVideo] = useState<Video | null>(null)
   const [catalogVersion, setCatalogVersion] = useState(0)
   const [updateAvailable, setUpdateAvailable] = useState(false)
 
@@ -119,18 +122,20 @@ function App() {
       )}
       {/* Home é eager; as demais telas são chunks lazy — a fallback só
           aparece no primeiro acesso a cada aba, enquanto o chunk baixa. */}
-      {view === 'home' && <Home onSelect={handleSelect} />}
+      {view === 'home' && <Home onSelect={handleSelect} onSaveToCollection={setSaveModalVideo} />}
       <Suspense fallback={<ScreenFallback />}>
         {view === 'catalog' && <Catalog key={catalogVersion} onSelect={handleSelect} />}
         {view === 'shorts' && <ShortsScreen key={catalogVersion} />}
         {view === 'favorites' && <Favorites onSelect={handleSelect} />}
         {view === 'playlist' && <Playlist onSelect={handleSelect} />}
         {view === 'history' && <History onSelect={handleSelect} />}
+        {view === 'collections' && <Collections onSelect={handleSelect} />}
       </Suspense>
       <Footer />
       {/* Overlays: fallback nulo — não devem piscar um "Carregando…" sobre a tela. */}
       <Suspense fallback={null}>
         <AccountPanel onCatalogChanged={() => setCatalogVersion((v) => v + 1)} />
+        {saveModalVideo && <SaveToCollectionModal video={saveModalVideo} onClose={() => setSaveModalVideo(null)} />}
       </Suspense>
       {playing && (
         <Suspense fallback={null}>
