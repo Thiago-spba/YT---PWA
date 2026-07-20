@@ -35,12 +35,10 @@ function isRateLimited(ip: string): boolean {
 const MAX_QUERY_LENGTH = 100
 
 const SYSTEM_PROMPT =
-  'Você expande termos de busca de vídeos do YouTube para um app familiar ' +
-  '(música religiosa, curiosidades, entretenimento leve, uso pessoal). Dado ' +
-  'um termo de busca, devolva até 5 sinônimos ou termos relacionados em ' +
-  'português, curtos (1 a 3 palavras cada), sem repetir o termo original e ' +
-  'sem inventar conteúdo — apenas reformule/expanda o termo em variações ' +
-  'plausíveis que alguém buscaria pelo mesmo assunto.'
+  'Você expande termos de busca de vídeos do YouTube em português brasileiro. ' +
+  'Dado um termo, devolva até 5 variações relacionadas em português, curtas (1 a 3 palavras), ' +
+  'sem repetir o termo original. Foco em: tecnologia, ciência, educação, história, cultura brasileira. ' +
+  'Responda SOMENTE com JSON válido no formato: {"terms": ["termo1", "termo2"]}'
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   if (req.method !== 'POST') {
@@ -70,30 +68,25 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: query }],
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: {
-            type: 'object',
-            properties: {
-              terms: { type: 'array', items: { type: 'string' } },
-            },
-            required: ['terms'],
-            additionalProperties: false,
-          },
-        },
-      },
+      messages: [{ role: 'user', content: `Busca: "${query}"\nResponda APENAS com JSON: {"terms": ["termo1", "termo2"]}` }],
     })
 
     const textBlock = response.content.find((block): block is Anthropic.TextBlock => block.type === 'text')
-    const parsed = textBlock ? (JSON.parse(textBlock.text) as { terms?: unknown }) : { terms: [] }
-    const terms = Array.isArray(parsed.terms)
-      ? parsed.terms.filter((t): t is string => typeof t === 'string').slice(0, 5)
-      : []
+    let terms: string[] = []
+    if (textBlock) {
+      try {
+        const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/)
+        const parsed = jsonMatch ? (JSON.parse(jsonMatch[0]) as { terms?: unknown }) : { terms: [] }
+        terms = Array.isArray(parsed.terms)
+          ? parsed.terms.filter((t): t is string => typeof t === 'string').slice(0, 5)
+          : []
+      } catch {
+        terms = []
+      }
+    }
 
     res.status(200).json({ terms })
   } catch (err) {

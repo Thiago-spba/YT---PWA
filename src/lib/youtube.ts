@@ -99,6 +99,8 @@ export async function searchVideosPage(query: string, pageToken?: string, order?
     type: 'video',
     maxResults: '12',
     safeSearch: 'strict',
+    regionCode: 'BR',
+    relevanceLanguage: 'pt',
   }
   if (pageToken) params.pageToken = pageToken
   if (order) params.order = order
@@ -192,6 +194,8 @@ export async function searchShortsPage(query: string, pageToken?: string): Promi
     maxResults: '24',
     safeSearch: 'strict',
     videoDuration: 'short',
+    regionCode: 'BR',
+    relevanceLanguage: 'pt',
   }
   if (pageToken) params.pageToken = pageToken
   const data = await fetchYoutube('search', params)
