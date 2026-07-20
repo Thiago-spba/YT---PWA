@@ -5,207 +5,254 @@ interface Props {
   onDone: () => void
 }
 
-interface Confetti {
+interface Particle {
   id: number
-  x: number
-  y: number
-  vx: number
-  vy: number
+  x: number; y: number
+  vx: number; vy: number
   color: string
   size: number
   rotation: number
-  rotationSpeed: number
-  shape: 'rect' | 'circle'
+  rotSpeed: number
+  shape: 'rect' | 'circle' | 'triangle'
+  opacity: number
 }
 
-const COLORS = ['#7c3aed', '#a78bfa', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#f97316']
+const COLORS = ['#7c3aed','#a78bfa','#c4b5fd','#f59e0b','#10b981','#3b82f6','#ec4899','#f97316','#06b6d4']
+
+function makeParticles(cx: number, cy: number): Particle[] {
+  return Array.from({ length: 90 }, (_, i) => {
+    const angle = (Math.random() * Math.PI * 2)
+    const speed = 3 + Math.random() * 10
+    return {
+      id: i,
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      size: 5 + Math.random() * 9,
+      rotation: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 10,
+      shape: (['rect','circle','triangle'] as const)[Math.floor(Math.random() * 3)],
+      opacity: 1,
+    }
+  })
+}
 
 export default function Onboarding({ onDone }: Props) {
-  const [phase, setPhase] = useState<'intro' | 'collide' | 'done'>('intro')
-  const [confetti, setConfetti] = useState<Confetti[]>([])
+  // phase: 'moving' → letras se aproximam (2s)
+  //        'impact' → colisão + flash (0.3s)
+  //        'settle' → letras se acomodam (0.5s)
+  //        'done'   → conteúdo aparece
+  const [phase, setPhase] = useState<'moving'|'impact'|'settle'|'done'>('moving')
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animRef = useRef<number>(0)
-  const confettiRef = useRef<Confetti[]>([])
+  const particlesRef = useRef<Particle[]>([])
+  const rafRef = useRef(0)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // Fase 1: letras se movem → colisão → confete
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase('collide'), 1200)
+    const t1 = setTimeout(() => setPhase('impact'), 2000)
     const t2 = setTimeout(() => {
-      // Gera confete
-      const pieces: Confetti[] = Array.from({ length: 120 }, (_, i) => ({
-        id: i,
-        x: window.innerWidth / 2,
-        y: window.innerHeight * 0.28,
-        vx: (Math.random() - 0.5) * 18,
-        vy: (Math.random() - 1.5) * 14,
-        color: COLORS[Math.floor(Math.random() * COLORS.length)],
-        size: Math.random() * 10 + 5,
-        rotation: Math.random() * 360,
-        rotationSpeed: (Math.random() - 0.5) * 8,
-        shape: Math.random() > 0.5 ? 'rect' : 'circle',
-      }))
-      confettiRef.current = pieces
-      setConfetti(pieces)
-      setPhase('done')
-    }, 1600)
-
-    return () => { clearTimeout(t1); clearTimeout(t2) }
+      // Dispara confete a partir do centro da tela
+      const cx = window.innerWidth / 2
+      const cy = (containerRef.current?.getBoundingClientRect().top ?? 120) + 60
+      particlesRef.current = makeParticles(cx, cy)
+      setPhase('settle')
+    }, 2300)
+    const t3 = setTimeout(() => setPhase('done'), 2800)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
   }, [])
 
-  // Animar confete no canvas
+  // Loop de animação do canvas
   useEffect(() => {
-    if (confetti.length === 0) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
+    function resize() {
+      if (!canvas) return
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    resize()
+    window.addEventListener('resize', resize)
 
-    function draw() {
+    function drawTriangle(ctx: CanvasRenderingContext2D, size: number) {
+      ctx.beginPath()
+      ctx.moveTo(0, -size / 2)
+      ctx.lineTo(size / 2, size / 2)
+      ctx.lineTo(-size / 2, size / 2)
+      ctx.closePath()
+      ctx.fill()
+    }
+
+    function loop() {
       if (!ctx || !canvas) return
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-      confettiRef.current = confettiRef.current
-        .map((c) => ({
-          ...c,
-          x: c.x + c.vx,
-          y: c.y + c.vy,
-          vy: c.vy + 0.4, // gravidade
-          vx: c.vx * 0.99, // atrito
-          rotation: c.rotation + c.rotationSpeed,
+      particlesRef.current = particlesRef.current
+        .map(p => ({
+          ...p,
+          x: p.x + p.vx,
+          y: p.y + p.vy,
+          vy: p.vy + 0.35,
+          vx: p.vx * 0.98,
+          rotation: p.rotation + p.rotSpeed,
+          opacity: Math.max(0, p.opacity - 0.012),
         }))
-        .filter((c) => c.y < canvas.height + 50)
+        .filter(p => p.opacity > 0 && p.y < canvas.height + 40)
 
-      for (const c of confettiRef.current) {
+      for (const p of particlesRef.current) {
         ctx.save()
-        ctx.translate(c.x, c.y)
-        ctx.rotate((c.rotation * Math.PI) / 180)
-        ctx.fillStyle = c.color
-        ctx.globalAlpha = Math.max(0, 1 - c.y / canvas.height)
-        if (c.shape === 'circle') {
+        ctx.globalAlpha = p.opacity
+        ctx.fillStyle = p.color
+        ctx.translate(p.x, p.y)
+        ctx.rotate((p.rotation * Math.PI) / 180)
+        if (p.shape === 'circle') {
           ctx.beginPath()
-          ctx.arc(0, 0, c.size / 2, 0, Math.PI * 2)
+          ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2)
           ctx.fill()
+        } else if (p.shape === 'triangle') {
+          drawTriangle(ctx, p.size)
         } else {
-          ctx.fillRect(-c.size / 2, -c.size / 4, c.size, c.size / 2)
+          ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2)
         }
         ctx.restore()
       }
 
-      if (confettiRef.current.length > 0) {
-        animRef.current = requestAnimationFrame(draw)
-      }
+      rafRef.current = requestAnimationFrame(loop)
     }
 
-    animRef.current = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(animRef.current)
-  }, [confetti])
+    rafRef.current = requestAnimationFrame(loop)
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
+  const isImpact = phase === 'impact'
+  const isMoving = phase === 'moving'
+  const isDone = phase === 'done' || phase === 'settle'
 
   return (
     <div className="relative mx-auto flex min-h-svh max-w-xl flex-col justify-center gap-6 overflow-hidden p-6 text-center">
-      {/* Canvas de confete */}
-      <canvas
-        ref={canvasRef}
-        className="pointer-events-none fixed inset-0 z-50"
-        style={{ opacity: phase === 'done' ? 1 : 0 }}
-      />
+      <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-50" />
 
-      {/* Animação YT */}
-      <div className="relative flex h-28 items-center justify-center select-none" aria-hidden>
-        {/* Y vem da esquerda */}
-        <span
-          className="absolute text-7xl font-black text-violet-600 dark:text-violet-400 transition-all"
+      {/* Letras animadas */}
+      <div ref={containerRef} className="relative flex h-32 items-center justify-center select-none" aria-hidden>
+        {/* Brilho de fundo na colisão */}
+        <div
+          className="absolute h-32 w-32 rounded-full"
           style={{
-            transform: phase === 'intro'
-              ? 'translateX(-140px) scale(0.8)'
-              : phase === 'collide'
-              ? 'translateX(-2px) scale(1.15) rotate(-3deg)'
-              : 'translateX(-22px) scale(1)',
-            transitionDuration: phase === 'intro' ? '0ms' : phase === 'collide' ? '380ms' : '250ms',
-            transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-            filter: phase === 'collide' ? 'drop-shadow(0 0 20px #7c3aed)' : 'none',
+            background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)',
+            opacity: isImpact ? 0.9 : 0,
+            transform: isImpact ? 'scale(2.5)' : 'scale(0)',
+            transition: 'opacity 200ms ease-out, transform 250ms ease-out',
+          }}
+        />
+
+        {/* Y — vem da esquerda devagar */}
+        <span
+          className="absolute font-black text-violet-600 dark:text-violet-400"
+          style={{
+            fontSize: '5rem',
+            lineHeight: 1,
+            transform: isMoving
+              ? 'translateX(-120px) scale(0.85)'
+              : isImpact
+              ? 'translateX(-1px) scale(1.18) rotate(-4deg)'
+              : 'translateX(-26px) scale(1) rotate(0deg)',
+            transition: isMoving
+              ? 'transform 2s cubic-bezier(0.25, 0.1, 0.25, 1)'
+              : isImpact
+              ? 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)'
+              : 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            textShadow: isImpact ? '0 0 30px #7c3aed, 0 0 60px #a78bfa' : 'none',
+            filter: isImpact ? 'brightness(1.4)' : 'brightness(1)',
           }}
         >
           Y
         </span>
 
-        {/* T vem da direita */}
+        {/* T — vem da direita devagar */}
         <span
-          className="absolute text-7xl font-black text-violet-800 dark:text-violet-300 transition-all"
+          className="absolute font-black text-violet-800 dark:text-violet-300"
           style={{
-            transform: phase === 'intro'
-              ? 'translateX(140px) scale(0.8)'
-              : phase === 'collide'
-              ? 'translateX(2px) scale(1.15) rotate(3deg)'
-              : 'translateX(22px) scale(1)',
-            transitionDuration: phase === 'intro' ? '0ms' : phase === 'collide' ? '380ms' : '250ms',
-            transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-            filter: phase === 'collide' ? 'drop-shadow(0 0 20px #5b21b6)' : 'none',
+            fontSize: '5rem',
+            lineHeight: 1,
+            transform: isMoving
+              ? 'translateX(120px) scale(0.85)'
+              : isImpact
+              ? 'translateX(1px) scale(1.18) rotate(4deg)'
+              : 'translateX(26px) scale(1) rotate(0deg)',
+            transition: isMoving
+              ? 'transform 2s cubic-bezier(0.25, 0.1, 0.25, 1)'
+              : isImpact
+              ? 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)'
+              : 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            textShadow: isImpact ? '0 0 30px #5b21b6, 0 0 60px #7c3aed' : 'none',
+            filter: isImpact ? 'brightness(1.4)' : 'brightness(1)',
           }}
         >
           T
         </span>
 
-        {/* Flash de colisão */}
-        <div
-          className="absolute inset-0 rounded-full bg-white transition-opacity duration-150"
-          style={{ opacity: phase === 'collide' ? 0.9 : 0 }}
-        />
-
-        {/* Anel de onda */}
-        {phase !== 'intro' && (
+        {/* Ondas de choque — anéis que se expandem */}
+        {[0, 1, 2].map((i) => (
           <div
-            className="absolute rounded-full border-4 border-violet-400"
+            key={i}
+            className="absolute rounded-full border-2 border-violet-400/60"
             style={{
-              width: phase === 'collide' ? '180px' : '0px',
-              height: phase === 'collide' ? '180px' : '0px',
-              opacity: phase === 'collide' ? 0 : 0,
-              transition: 'width 600ms ease-out, height 600ms ease-out, opacity 600ms ease-out',
+              width: isImpact ? `${140 + i * 60}px` : '0px',
+              height: isImpact ? `${140 + i * 60}px` : '0px',
+              opacity: isImpact ? 0 : 0,
+              transition: `width ${0.4 + i * 0.12}s ease-out ${i * 0.06}s,
+                           height ${0.4 + i * 0.12}s ease-out ${i * 0.06}s,
+                           opacity ${0.4 + i * 0.12}s ease-out ${i * 0.06}s`,
             }}
           />
-        )}
+        ))}
       </div>
 
-      {/* Conteúdo — aparece após animação */}
+      {/* Conteúdo — aparece suavemente após animação */}
       <div
-        className="flex flex-col gap-5 transition-all duration-500"
-        style={{ opacity: phase === 'done' ? 1 : 0, transform: phase === 'done' ? 'translateY(0)' : 'translateY(16px)' }}
+        className="flex flex-col gap-5 transition-all duration-700"
+        style={{
+          opacity: isDone ? 1 : 0,
+          transform: isDone ? 'translateY(0)' : 'translateY(20px)',
+          pointerEvents: isDone ? 'auto' : 'none',
+        }}
       >
         <h1 className="text-3xl font-black text-violet-700 dark:text-violet-300">
           Bem-vindo ao YT
         </h1>
 
         <p className="text-neutral-600 dark:text-neutral-300">
-          Seu player de vídeos do YouTube, simples e sem distração.
-          Para instalar, toque no menu do navegador e escolha{' '}
+          Seu player de vídeos do YouTube — simples, direto e sem distração.
+          Para instalar, abra o menu do navegador e escolha{' '}
           <strong>"Instalar aplicativo"</strong> ou{' '}
           <strong>"Adicionar à tela inicial"</strong>.
         </p>
 
-        <div className="flex flex-col gap-3 rounded-2xl bg-neutral-100 p-4 text-left text-sm text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 text-lg">📶</span>
-            <p><strong>Requer internet.</strong> Os vídeos são transmitidos ao vivo — não é possível baixá-los para ver offline.</p>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 text-lg">⚖️</span>
-            <p><strong>Diretrizes do YouTube.</strong> O download de vídeos não é permitido pelos Termos de Uso do YouTube, exceto pelo app oficial com YouTube Premium.</p>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 text-lg">📋</span>
-            <p><strong>Responsabilidade do conteúdo.</strong> Os vídeos são de responsabilidade de quem os publica na plataforma do YouTube. Este app apenas exibe o conteúdo disponível publicamente.</p>
-          </div>
+        <div className="flex flex-col gap-3 rounded-2xl bg-neutral-100 p-4 text-left dark:bg-neutral-800">
+          {[
+            { icon: '📶', title: 'Requer internet', text: 'Os vídeos são transmitidos em tempo real — não é possível assisti-los sem conexão.' },
+            { icon: '⚖️', title: 'Download não permitido', text: 'As diretrizes do YouTube proíbem o download de vídeos, exceto pelo app oficial com YouTube Premium.' },
+            { icon: '📋', title: 'Responsabilidade do conteúdo', text: 'Os vídeos são de responsabilidade de quem os publica. Este app apenas exibe conteúdo público do YouTube.' },
+          ].map(({ icon, title, text }) => (
+            <div key={title} className="flex items-start gap-3">
+              <span className="mt-0.5 text-xl">{icon}</span>
+              <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                <strong className="text-neutral-800 dark:text-neutral-100">{title}.</strong>{' '}{text}
+              </p>
+            </div>
+          ))}
         </div>
 
         <button
           type="button"
-          onClick={() => {
-            markOnboardingDone()
-            onDone()
-          }}
-          className="mt-2 rounded-2xl bg-violet-600 px-6 py-4 text-base font-bold text-white shadow-lg shadow-violet-200 transition-transform hover:bg-violet-700 hover:scale-[1.02] active:scale-95 dark:shadow-violet-900"
+          onClick={() => { markOnboardingDone(); onDone() }}
+          className="mt-2 rounded-2xl bg-violet-600 px-6 py-4 text-base font-bold text-white shadow-lg transition-all hover:bg-violet-700 hover:scale-[1.02] active:scale-95"
         >
           Começar →
         </button>
