@@ -121,3 +121,4 @@ export async function fetchGoogleProfile(): Promise<GoogleProfile> {
   const data = await res.json()
   return { name: data.name, email: data.email, picture: data.picture }
 }
+
