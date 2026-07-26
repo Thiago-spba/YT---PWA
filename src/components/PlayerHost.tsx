@@ -98,6 +98,20 @@ function ChevronRightIcon() {
   )
 }
 
+function LockIcon({ locked }: { locked: boolean }) {
+  return locked ? (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path strokeLinecap="round" d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+      <rect x="3" y="11" width="18" height="11" rx="2" />
+      <path strokeLinecap="round" d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </svg>
+  )
+}
+
 function PipIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -133,6 +147,7 @@ export default function PlayerHost({
   const [loadingMore, setLoadingMore] = useState(false)
   const [autoplay, setAutoplay] = useState(isAutoplayEnabled())
   const [keepScreenOn, setKeepScreenOn] = useState(isKeepScreenOnEnabled())
+  const [locked, setLocked] = useState(false)
   const [pipActive, setPipActive] = useState(false)
   const [pipMessage, setPipMessage] = useState<string | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
@@ -498,6 +513,21 @@ export default function PlayerHost({
           {visual !== 'mini' && (
             <button
               type="button"
+              onClick={() => setLocked((v) => !v)}
+              title={locked ? 'Desbloquear player' : 'Bloquear player'}
+              aria-label={locked ? 'Desbloquear player' : 'Bloquear player'}
+              className={
+                locked
+                  ? 'flex h-9 w-9 items-center justify-center rounded-full bg-amber-500 text-white'
+                  : visual === 'fullscreen' ? iconButtonClassDark : iconButtonClass
+              }
+            >
+              <LockIcon locked={locked} />
+            </button>
+          )}
+          {visual !== 'mini' && (
+            <button
+              type="button"
               onClick={handleTogglePip}
               title={pipActive ? 'Sair do Picture-in-Picture' : 'Ativar Picture-in-Picture'}
               aria-label={pipActive ? 'Sair do Picture-in-Picture' : 'Ativar Picture-in-Picture'}
@@ -546,8 +576,8 @@ export default function PlayerHost({
           )}
           <button
             type="button"
-            onClick={onClose}
-            title="Fechar"
+            onClick={() => { if (!locked) onClose() }}
+            title={locked ? 'Desbloqueie para fechar' : 'Fechar'}
             aria-label="Fechar"
             className={visual === 'mini' ? miniButtonClass : visual === 'fullscreen' ? iconButtonClassDark : iconButtonClass}
           >

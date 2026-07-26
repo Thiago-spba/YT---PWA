@@ -274,7 +274,7 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     <>
       <button
         type="button"
-        onClick={() => (open ? closePanel() : setOpen(true))}
+        onClick={() => setOpen(true)}
         aria-label="Configurações"
         title="Configurações"
         className="fixed bottom-4 left-4 z-[45] flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-violet-600 text-white shadow-lg hover:bg-violet-700"
@@ -294,6 +294,19 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
             onClick={(e) => e.stopPropagation()}
             className="fixed bottom-20 left-4 z-[45] max-h-[70vh] w-[calc(100vw-2rem)] max-w-sm overflow-y-auto rounded-xl bg-white p-4 shadow-xl dark:bg-neutral-900"
           >
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Configurações</span>
+              <button
+                type="button"
+                onClick={closePanel}
+                aria-label="Fechar"
+                className="flex h-8 w-8 items-center justify-center rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
             {needsPinToView ? (
               <form onSubmit={handleUnlock} className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-100">
