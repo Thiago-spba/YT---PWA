@@ -70,23 +70,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const response = await client.messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 200,
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT + ' Responda APENAS com JSON no formato {"terms": ["termo1", "termo2"]}.',
       messages: [{ role: 'user', content: query }],
-      output_config: {
-        format: {
-          type: 'json_schema',
-          schema: {
-            type: 'object',
-            properties: {
-              terms: { type: 'array', items: { type: 'string' } },
-            },
-            required: ['terms'],
-            additionalProperties: false,
-          },
-        },
-      },
     })
 
     const textBlock = response.content.find((block): block is Anthropic.TextBlock => block.type === 'text')

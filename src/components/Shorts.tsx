@@ -156,7 +156,7 @@ export default function Shorts({ startId, onBack }: Props) {
   } = useShortsFeed()
   const [searchFeed, setSearchFeed] = useState<Video[] | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [muted, setMuted] = useState(true)
+  const [muted, setMuted] = useState(false)
   const [favorite, setFavorite] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
@@ -186,7 +186,12 @@ export default function Shorts({ startId, onBack }: Props) {
     const target = startId && feedShorts.some((v) => v.id === startId) ? startId : feedShorts[0].id
     setActiveId(target)
     requestAnimationFrame(() => {
-      itemRefs.current.get(target)?.scrollIntoView({ block: 'start' })
+      const el = itemRefs.current.get(target)
+      if (el) {
+        el.scrollIntoView({ block: 'start' })
+        setTimeout(() => el.scrollIntoView({ block: 'start' }), 100)
+        setTimeout(() => el.scrollIntoView({ block: 'start' }), 300)
+      }
     })
   }, [loaded, feedShorts, startId])
 
