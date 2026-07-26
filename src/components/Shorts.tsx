@@ -134,10 +134,11 @@ function ShortThumb({ video, isActive, registerRef, onVisible }: ThumbProps) {
 
 interface Props {
   startId?: string
+  startIndex?: number
   onBack?: () => void
 }
 
-export default function Shorts({ startId, onBack }: Props) {
+export default function Shorts({ startId, startIndex = 0, onBack }: Props) {
   // Feed geral (catálogo + descoberta, vindo do hook compartilhado com a
   // grade) e resultado de busca ficam separados — `shorts` (abaixo) é
   // sempre "o que está sendo exibido agora", trocando sozinho entre os
@@ -181,12 +182,14 @@ export default function Shorts({ startId, onBack }: Props) {
   // na lista) — e rola até ele, já que o scroll-snap por padrão começa
   // no topo.
   const startIdRef = useRef(startId)
+  const startIndexRef = useRef(startIndex)
 
   useEffect(() => {
     if (didInitRef.current || !loaded || feedShorts.length === 0) return
     didInitRef.current = true
     const sid = startIdRef.current
-    const target = sid && feedShorts.some((v) => v.id === sid) ? sid : feedShorts[0].id
+    const idx = startIndexRef.current
+    const target = sid && feedShorts.some((v) => v.id === sid) ? sid : feedShorts[idx] ? feedShorts[idx].id : feedShorts[0].id
     setActiveId(target)
     function tryScroll(attempts: number) {
       const el = itemRefs.current.get(target)

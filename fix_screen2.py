@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿content = '''import { useState } from 'react'
 import Shorts from './Shorts'
 import ShortsGrid from './ShortsGrid'
 
@@ -20,3 +20,7 @@ export default function ShortsScreen() {
     />
   )
 }
+'''
+with open('src/components/ShortsScreen.tsx', 'w', encoding='utf-8') as f:
+    f.write(content)
+print('OK')

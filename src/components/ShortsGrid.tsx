@@ -1,7 +1,7 @@
 import { useShortsFeed } from '../lib/useShortsFeed'
 
 interface Props {
-  onOpen: (videoId: string) => void
+  onOpen: (videoId: string, index: number) => void
 }
 
 /**
@@ -39,11 +39,11 @@ export default function ShortsGrid({ onOpen }: Props) {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
-          {shorts.map((v) => (
+          {shorts.map((v, index) => (
             <button
               key={v.id}
               type="button"
-              onClick={() => onOpen(v.id)}
+              onClick={() => onOpen(v.id, index)}
               className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-neutral-900"
             >
               <img

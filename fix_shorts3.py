@@ -1,0 +1,6 @@
+﻿with open("src/components/ShortsGrid.tsx", encoding="utf-8") as f: c = f.read()
+c = c.replace("onOpen: (videoId: string) => void", "onOpen: (videoId: string, index: number) => void")
+c = c.replace("onClick={() => onOpen(v.id)}", "onClick={() => onOpen(v.id, index)}")
+c = c.replace("shorts.map((v) =>", "shorts.map((v, index) =>")
+with open("src/components/ShortsGrid.tsx", "w", encoding="utf-8") as f: f.write(c)
+print("OK")
