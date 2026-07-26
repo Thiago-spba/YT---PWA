@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿content = """import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
 import { isFavorite, recordHistory, recordInterest, removeFromCatalog, toggleFavorite } from '../lib/db'
 import { categorize } from '../lib/categories'
@@ -303,3 +303,6 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     </div>
   )
 }
+"""
+open("src/components/Shorts.tsx", "w", encoding="utf-8").write(content)
+print("OK")

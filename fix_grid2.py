@@ -1,4 +1,4 @@
-import type { ShortsFeed } from '../lib/useShortsFeed'
+﻿content = """import type { ShortsFeed } from '../lib/useShortsFeed'
 
 interface Props {
   feed: ShortsFeed
@@ -47,3 +47,6 @@ export default function ShortsGrid({ feed, onOpen }: Props) {
     </div>
   )
 }
+"""
+open("src/components/ShortsGrid.tsx", "w", encoding="utf-8").write(content)
+print("OK")

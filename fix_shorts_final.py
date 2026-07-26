@@ -1,10 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+﻿content = open("src/components/Shorts.tsx", encoding="utf-8").read()
+open("src/components/Shorts.tsx.bak", "w", encoding="utf-8").write(content)
+
+new_content = """import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
 import { isFavorite, recordHistory, recordInterest, removeFromCatalog, toggleFavorite } from '../lib/db'
 import { categorize } from '../lib/categories'
 import { hasApiKey, searchShortsPage, YoutubeApiError } from '../lib/youtube'
 import { loadYouTubeApi, type YTPlayer } from '../lib/youtubePlayer'
-import type { ShortsFeed } from '../lib/useShortsFeed'
+import { useShortsFeed } from '../lib/useShortsFeed'
 
 function StarIcon({ filled }: { filled: boolean }) {
   return (
@@ -13,6 +16,7 @@ function StarIcon({ filled }: { filled: boolean }) {
     </svg>
   )
 }
+
 function MuteIcon({ muted }: { muted: boolean }) {
   return muted ? (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
@@ -26,6 +30,7 @@ function MuteIcon({ muted }: { muted: boolean }) {
     </svg>
   )
 }
+
 function ChevronUpIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-6 w-6">
@@ -33,6 +38,7 @@ function ChevronUpIcon() {
     </svg>
   )
 }
+
 function ChevronDownIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-6 w-6">
@@ -40,6 +46,7 @@ function ChevronDownIcon() {
     </svg>
   )
 }
+
 function BackArrowIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-5 w-5">
@@ -47,6 +54,7 @@ function BackArrowIcon() {
     </svg>
   )
 }
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -54,6 +62,7 @@ function TrashIcon() {
     </svg>
   )
 }
+
 function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
@@ -64,22 +73,21 @@ function SearchIcon() {
 }
 
 interface Props {
-  initialFeed: Video[]
-  feedHook: ShortsFeed
+  startId?: string
+  startIndex?: number
   onBack?: () => void
 }
 
-export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
-  const { loadingMore: feedLoadingMore, discoveryError, catalogIdsRef, loadMore: loadMoreFeed, retryDiscovery, removeFromFeed } = feedHook
+export default function Shorts({ startId, startIndex = 0, onBack }: Props) {
+  const { shorts: feedShorts, loaded, loadingMore: feedLoadingMore, discoveryError, catalogIdsRef, loadMore: loadMoreFeed, retryDiscovery, removeFromFeed } = useShortsFeed()
 
-  const [feed, setFeed] = useState<Video[]>(initialFeed)
+  const [searchFeed, setSearchFeed] = useState<Video[] | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [muted, setMuted] = useState(false)
   const [favorite, setFavorite] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [searchStatus, setSearchStatus] = useState<string | null>(null)
-  const [isSearchMode, setIsSearchMode] = useState(false)
   const [searchLoadingMore, setSearchLoadingMore] = useState(false)
 
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -89,60 +97,38 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
   const searchQueryRef = useRef<string | null>(null)
   const searchTokenRef = useRef<string | undefined>(undefined)
   const searchSeenRef = useRef(new Set<string>())
-  const originalFeedRef = useRef<Video[]>(initialFeed)
+  const initiatedRef = useRef(false)
 
-  const activeVideo = feed[activeIndex] ?? null
-  const loadingMore = isSearchMode ? searchLoadingMore : feedLoadingMore
+  const shorts = searchFeed ?? feedShorts
+  const loadingMore = searchFeed !== null ? searchLoadingMore : feedLoadingMore
+  const activeVideo = shorts[activeIndex] ?? null
 
+  // Inicia no video clicado
   useEffect(() => {
-    if (feed.length === 0) return
-    const v = feed[0]
-    recordHistory(v).catch(() => {})
-    recordInterest(categorize(v.title + ' ' + v.channelTitle), 2).catch(() => {})
-    isFavorite(v.id).then(setFavorite).catch(() => {})
-    function tryLoad() {
-      if (readyRef.current) {
-        playerRef.current?.loadVideoById(v.id)
-        if (muted) playerRef.current?.mute()
-        else playerRef.current?.unMute()
-      } else {
-        setTimeout(tryLoad, 150)
-      }
-    }
-    tryLoad()
-  }, [])
+    if (initiatedRef.current || !loaded || feedShorts.length === 0) return
+    initiatedRef.current = true
+    const idx = startId ? feedShorts.findIndex((v) => v.id === startId) : startIndex
+    setActiveIndex(idx >= 0 ? idx : 0)
+  }, [loaded, feedShorts, startId, startIndex])
 
-  useEffect(() => {
-    if (!activeVideo || activeIndex === 0) return
-    recordHistory(activeVideo).catch(() => {})
-    recordInterest(categorize(activeVideo.title + ' ' + activeVideo.channelTitle), 2).catch(() => {})
-    isFavorite(activeVideo.id).then(setFavorite).catch(() => {})
-    function tryLoad() {
-      if (readyRef.current) {
-        playerRef.current?.loadVideoById(activeVideo!.id)
-        if (muted) playerRef.current?.mute()
-        else playerRef.current?.unMute()
-      } else {
-        setTimeout(tryLoad, 150)
-      }
-    }
-    tryLoad()
-    if (activeIndex >= feed.length - 3) loadMore()
-  }, [activeIndex])
-
+  // Cria player uma unica vez
   useEffect(() => {
     let cancelled = false
     loadYouTubeApi().then((YT) => {
       if (cancelled || !playerContainerRef.current) return
       playerRef.current = new YT.Player(playerContainerRef.current, {
-        videoId: feed[0]?.id ?? '',
+        videoId: '',
         host: 'https://www.youtube-nocookie.com',
         width: '100%',
         height: '100%',
         playerVars: { rel: 0, autoplay: 1, controls: 0, playsinline: 1, modestbranding: 1, origin: window.location.origin },
         events: {
-          onReady: () => { readyRef.current = true },
-          onStateChange: (e) => { if (e.data === 0) playerRef.current?.playVideo() },
+          onReady: () => {
+            readyRef.current = true
+          },
+          onStateChange: (e) => {
+            if (e.data === 0) playerRef.current?.playVideo()
+          },
         },
       })
     })
@@ -154,13 +140,41 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     }
   }, [])
 
+  // Troca o video quando muda activeIndex
+  useEffect(() => {
+    if (!activeVideo) return
+    recordHistory(activeVideo).catch(() => {})
+    recordInterest(categorize(activeVideo.title + ' ' + activeVideo.channelTitle), 2).catch(() => {})
+    isFavorite(activeVideo.id).then(setFavorite).catch(() => {})
+
+    function load() {
+      playerRef.current?.loadVideoById(activeVideo!.id)
+      if (muted) playerRef.current?.mute()
+      else playerRef.current?.unMute()
+    }
+
+    if (readyRef.current) {
+      load()
+    } else {
+      const wait = setInterval(() => {
+        if (readyRef.current) { load(); clearInterval(wait) }
+      }, 150)
+      return () => clearInterval(wait)
+    }
+  }, [activeIndex, activeVideo?.id])
+
   useEffect(() => {
     if (muted) playerRef.current?.mute()
     else playerRef.current?.unMute()
   }, [muted])
 
+  // Carrega mais ao chegar perto do fim
+  useEffect(() => {
+    if (activeIndex >= shorts.length - 3) loadMore()
+  }, [activeIndex, shorts.length])
+
   async function loadMore() {
-    if (isSearchMode) {
+    if (searchFeed !== null) {
       if (!hasApiKey() || searchLoadingMore || !searchTokenRef.current || !searchQueryRef.current) return
       setSearchLoadingMore(true)
       try {
@@ -168,20 +182,21 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
         searchTokenRef.current = page.nextPageToken
         const fresh = page.videos.filter((v) => !searchSeenRef.current.has(v.id))
         fresh.forEach((v) => searchSeenRef.current.add(v.id))
-        if (fresh.length > 0) setFeed((c) => [...c, ...fresh])
+        if (fresh.length > 0) setSearchFeed((c) => [...(c ?? []), ...fresh])
       } catch { searchTokenRef.current = undefined }
       finally { setSearchLoadingMore(false) }
       return
     }
     await loadMoreFeed()
-    setFeed([...originalFeedRef.current, ...feedHook.shorts.slice(originalFeedRef.current.length)])
   }
 
   function scrollTo(idx: number) {
-    if (idx < 0 || idx >= feed.length) return
+    if (idx < 0 || idx >= shorts.length) return
     setActiveIndex(idx)
-    const el = containerRef.current?.children[idx] as HTMLElement | undefined
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const items = containerRef.current?.children
+    if (items?.[idx]) {
+      (items[idx] as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
   }
 
   async function handleToggleFavorite() {
@@ -195,7 +210,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     await removeFromCatalog(id)
     catalogIdsRef.current.delete(id)
     removeFromFeed(id)
-    setFeed((c) => c.filter((v) => v.id !== id))
+    if (searchFeed) setSearchFeed((c) => (c ?? []).filter((v) => v.id !== id))
     setActiveIndex((i) => Math.max(0, i - 1))
   }
 
@@ -211,9 +226,8 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
       page.videos.forEach((v) => searchSeenRef.current.add(v.id))
       searchTokenRef.current = page.nextPageToken
       searchQueryRef.current = value
-      setFeed(page.videos)
+      setSearchFeed(page.videos)
       setActiveIndex(0)
-      setIsSearchMode(true)
       if (page.videos.length === 0) setSearchStatus('Nenhum video curto encontrado.')
     } catch (err) {
       setSearchStatus(err instanceof YoutubeApiError ? err.message : 'Erro ao buscar.')
@@ -221,9 +235,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
   }
 
   function handleExitSearch() {
-    setFeed(originalFeedRef.current)
-    setActiveIndex(0)
-    setIsSearchMode(false)
+    setSearchFeed(null)
     setSearchStatus(null)
     setQuery('')
     searchQueryRef.current = null
@@ -237,20 +249,31 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
           <BackArrowIcon />
         </button>
       )}
+
       {hasApiKey() && (
         <div className="absolute top-2 right-2 z-30 flex items-center gap-2">
           <form onSubmit={handleSearch} className="flex items-center gap-1">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar shorts..." className="w-32 rounded-full border border-neutral-700 bg-black/70 px-3 py-1 text-xs text-white placeholder-neutral-400 focus:outline-none focus:border-violet-500" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar shorts..."
+              className="w-32 rounded-full border border-neutral-700 bg-black/70 px-3 py-1 text-xs text-white placeholder-neutral-400 focus:outline-none focus:border-violet-500"
+            />
             <button type="submit" disabled={searching} className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-600 text-white disabled:opacity-50">
               <SearchIcon />
             </button>
           </form>
-          {isSearchMode && (
-            <button type="button" onClick={handleExitSearch} className="rounded-full bg-black/50 px-2 py-1 text-xs text-white">Voltar</button>
+          {searchFeed !== null && (
+            <button type="button" onClick={handleExitSearch} className="rounded-full bg-black/50 px-2 py-1 text-xs text-white">
+              Voltar
+            </button>
           )}
         </div>
       )}
-      {feed.length === 0 ? (
+
+      {!loaded ? (
+        <p className="m-auto text-sm text-neutral-400">Carregando...</p>
+      ) : shorts.length === 0 ? (
         <div className="m-auto flex flex-col items-center gap-3 p-8 text-center text-sm text-neutral-400">
           {discoveryError ? (
             <>
@@ -264,9 +287,13 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
       ) : (
         <>
           <div ref={containerRef} className="flex-1 snap-y snap-mandatory overflow-y-scroll">
-            {feed.map((v, i) => (
+            {shorts.map((v, i) => (
               <div key={v.id} className="relative h-full w-full snap-start overflow-hidden bg-neutral-900">
-                <img src={v.thumbnailUrl} alt="" className={"h-full w-full object-cover " + (i === activeIndex ? "opacity-0" : "opacity-100")} />
+                <img
+                  src={v.thumbnailUrl}
+                  alt=""
+                  className={`h-full w-full object-cover ${i === activeIndex ? 'opacity-0' : 'opacity-100'}`}
+                />
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-4 pt-10">
                   <p className="line-clamp-2 text-sm font-medium text-white">{v.title}</p>
                   <p className="text-xs text-neutral-300">{v.channelTitle}</p>
@@ -274,28 +301,36 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
               </div>
             ))}
           </div>
+
           <div className="pointer-events-none absolute inset-0">
             <div ref={playerContainerRef} className="pointer-events-none h-full w-full" />
           </div>
-          <div className="pointer-events-none absolute right-2 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-4">
-            <button type="button" onClick={handleToggleFavorite} className={"pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full text-white " + (favorite ? "bg-violet-600" : "bg-black/50")}>
-              <StarIcon filled={favorite} />
-            </button>
-            <button type="button" onClick={() => setMuted((m) => !m)} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white">
-              <MuteIcon muted={muted} />
-            </button>
-            {activeVideo && catalogIdsRef.current.has(activeVideo.id) && (
-              <button type="button" onClick={handleDeleteActive} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-red-600">
-                <TrashIcon />
+
+          <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-2">
+            <div className="flex justify-end pt-12">
+            </div>
+            <div className="flex flex-col items-end gap-4 pr-1 pb-8">
+              <button type="button" onClick={handleToggleFavorite} className={`pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full text-white ${favorite ? 'bg-violet-600' : 'bg-black/50'}`}>
+                <StarIcon filled={favorite} />
               </button>
-            )}
+              <button type="button" onClick={() => setMuted((m) => !m)} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white">
+                <MuteIcon muted={muted} />
+              </button>
+              {activeVideo && catalogIdsRef.current.has(activeVideo.id) && (
+                <button type="button" onClick={handleDeleteActive} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-red-600">
+                  <TrashIcon />
+                </button>
+              )}
+            </div>
           </div>
+
           <button type="button" onClick={() => scrollTo(activeIndex - 1)} disabled={activeIndex === 0} className="pointer-events-auto absolute left-1/2 top-12 z-20 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white disabled:opacity-0">
             <ChevronUpIcon />
           </button>
-          <button type="button" onClick={() => scrollTo(activeIndex + 1)} disabled={activeIndex >= feed.length - 1} className="pointer-events-auto absolute left-1/2 bottom-4 z-20 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white disabled:opacity-0">
+          <button type="button" onClick={() => scrollTo(activeIndex + 1)} disabled={activeIndex >= shorts.length - 1} className="pointer-events-auto absolute left-1/2 bottom-4 z-20 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white disabled:opacity-0">
             <ChevronDownIcon />
           </button>
+
           {searchStatus && <p className="absolute inset-x-0 top-16 text-center text-sm text-neutral-300">{searchStatus}</p>}
           {loadingMore && <p className="absolute inset-x-0 bottom-1 text-center text-xs text-neutral-400">Carregando mais...</p>}
         </>
@@ -303,3 +338,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     </div>
   )
 }
+"""
+
+open("src/components/Shorts.tsx", "w", encoding="utf-8").write(new_content)
+print("OK")
