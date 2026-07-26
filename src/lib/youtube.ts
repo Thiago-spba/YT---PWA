@@ -78,6 +78,8 @@ export async function searchVideos(query: string): Promise<Video[]> {
     type: 'video',
     maxResults: '12',
     safeSearch: 'strict',
+    relevanceLanguage: 'pt',
+    regionCode: 'BR',
   })
   return data.items.map((item: any) => ({
     id: item.id.videoId,
@@ -99,6 +101,8 @@ export async function searchVideosPage(query: string, pageToken?: string, order?
     type: 'video',
     maxResults: '12',
     safeSearch: 'strict',
+    relevanceLanguage: 'pt',
+    regionCode: 'BR',
   }
   if (pageToken) params.pageToken = pageToken
   if (order) params.order = order

@@ -248,12 +248,16 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     let totalSkipped = 0
     try {
       for (const p of playlists) {
-        const { videos, skipped } = await filterAndEnrich(await listPlaylistVideos(p.id))
-        for (const video of videos) {
-          await addToCatalog(video)
+        try {
+          const { videos, skipped } = await filterAndEnrich(await listPlaylistVideos(p.id))
+          for (const video of videos) {
+            await addToCatalog(video)
+          }
+          total += videos.length
+          totalSkipped += skipped
+        } catch {
+          continue
         }
-        total += videos.length
-        totalSkipped += skipped
       }
       setImportStatus(
         `${total} vídeo(s) importados de todas as playlists.${skippedSuffix(totalSkipped)}`,

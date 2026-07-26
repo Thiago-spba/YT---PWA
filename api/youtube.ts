@@ -37,7 +37,7 @@ const MAX_QUERY_LENGTH = 200
 // — evita que o proxy vire uma porta aberta para qualquer parâmetro da API
 // do Google.
 const ALLOWED_PARAMS: Record<string, string[]> = {
-  search: ['q', 'part', 'type', 'maxResults', 'safeSearch', 'pageToken', 'order', 'videoDuration'],
+  search: ['q', 'part', 'type', 'maxResults', 'safeSearch', 'pageToken', 'order', 'videoDuration', 'relevanceLanguage', 'regionCode'],
   videos: ['id', 'part'],
 }
 

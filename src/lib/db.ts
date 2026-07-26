@@ -17,7 +17,7 @@ function getDB() {
     // InvalidStateError), não guarda a promise rejeitada — assim a próxima
     // chamada tenta abrir de novo em vez de falhar para sempre com o
     // mesmo erro cacheado.
-    dbPromise = openDB<YtPwaDB>('yt-pwa', 3, {
+    dbPromise = openDB<YtPwaDB>('yt-pwa', 4, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           db.createObjectStore('catalog', { keyPath: 'id' })
