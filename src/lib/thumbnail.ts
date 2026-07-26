@@ -11,6 +11,6 @@ export function resolveThumbnail(
   return (
     thumbnails?.medium?.url ||
     thumbnails?.default?.url ||
-    `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`
+    `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`
   )
 }

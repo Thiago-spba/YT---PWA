@@ -26,6 +26,20 @@ function MuteIcon({ muted }: { muted: boolean }) {
     </svg>
   )
 }
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
+      <path d="M8 5v14l11-7z" />
+    </svg>
+  )
+}
+function PauseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-8 w-8">
+      <path d="M6 4h4v16H6zm8 0h4v16h-4z" />
+    </svg>
+  )
+}
 function ChevronUpIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-6 w-6">
@@ -74,7 +88,8 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
 
   const [feed, setFeed] = useState<Video[]>(initialFeed)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [muted, setMuted] = useState(false)
+  const [muted, setMuted] = useState(true)
+  const [isPlaying, setIsPlaying] = useState(true)
   const [favorite, setFavorite] = useState(false)
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
@@ -105,6 +120,8 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
         playerRef.current?.loadVideoById(v.id)
         if (muted) playerRef.current?.mute()
         else playerRef.current?.unMute()
+        if (isPlaying) playerRef.current?.playVideo()
+        else playerRef.current?.pauseVideo()
       } else {
         setTimeout(tryLoad, 150)
       }
@@ -122,6 +139,8 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
         playerRef.current?.loadVideoById(activeVideo!.id)
         if (muted) playerRef.current?.mute()
         else playerRef.current?.unMute()
+        if (isPlaying) playerRef.current?.playVideo()
+        else playerRef.current?.pauseVideo()
       } else {
         setTimeout(tryLoad, 150)
       }
@@ -139,10 +158,28 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
         host: 'https://www.youtube-nocookie.com',
         width: '100%',
         height: '100%',
-        playerVars: { rel: 0, autoplay: 1, controls: 0, playsinline: 1, modestbranding: 1, origin: window.location.origin },
+        playerVars: { 
+          rel: 0, 
+          autoplay: 1, 
+          controls: 0, 
+          playsinline: 1, 
+          modestbranding: 1, 
+          origin: window.location.origin,
+          mute: 1
+        },
         events: {
-          onReady: () => { readyRef.current = true },
-          onStateChange: (e) => { if (e.data === 0) playerRef.current?.playVideo() },
+          onReady: () => { 
+            readyRef.current = true
+            if (isPlaying) playerRef.current?.playVideo()
+          },
+          onStateChange: (e) => { 
+            if (e.data === 0) {
+              // Autoplay next video when current ends
+              if (activeIndex < feed.length - 1) {
+                scrollTo(activeIndex + 1)
+              }
+            }
+          },
         },
       })
     })
@@ -158,6 +195,11 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     if (muted) playerRef.current?.mute()
     else playerRef.current?.unMute()
   }, [muted])
+
+  useEffect(() => {
+    if (isPlaying) playerRef.current?.playVideo()
+    else playerRef.current?.pauseVideo()
+  }, [isPlaying])
 
   async function loadMore() {
     if (isSearchMode) {
@@ -283,6 +325,13 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
             </button>
             <button type="button" onClick={() => setMuted((m) => !m)} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white">
               <MuteIcon muted={muted} />
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setIsPlaying((p) => !p)} 
+              className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white"
+            >
+              {isPlaying ? <PauseIcon /> : <PlayIcon />}
             </button>
             {activeVideo && catalogIdsRef.current.has(activeVideo.id) && (
               <button type="button" onClick={handleDeleteActive} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-red-600">

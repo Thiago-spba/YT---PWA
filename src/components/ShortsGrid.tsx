@@ -27,9 +27,19 @@ export default function ShortsGrid({ feed, onOpen }: Props) {
       ) : (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
           {shorts.map((v) => (
-            <button key={v.id} type="button" onClick={() => onOpen(v.id)} className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-neutral-900">
-              <img src={v.thumbnailUrl} alt="" className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2 pt-8 text-left text-white">
+            <button 
+              key={v.id} 
+              type="button" 
+              onClick={() => onOpen(v.id)} 
+              className="group relative aspect-[9/16] overflow-hidden rounded-lg bg-neutral-900 transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-violet-500"
+            >
+              <img 
+                src={v.thumbnailUrl} 
+                alt="" 
+                className="h-full w-full object-cover transition-transform group-hover:scale-105" 
+                loading="lazy"
+              />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 pt-6 text-left text-white">
                 <p className="line-clamp-2 text-xs font-medium sm:text-sm">{v.title}</p>
                 <p className="truncate text-[11px] text-neutral-300 sm:text-xs">{v.channelTitle}</p>
               </div>
