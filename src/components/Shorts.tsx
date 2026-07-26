@@ -180,20 +180,24 @@ export default function Shorts({ startId, onBack }: Props) {
   // (preferindo `startId`, vindo da grade de descoberta, se ele estiver
   // na lista) — e rola até ele, já que o scroll-snap por padrão começa
   // no topo.
+  const startIdRef = useRef(startId)
+
   useEffect(() => {
     if (didInitRef.current || !loaded || feedShorts.length === 0) return
     didInitRef.current = true
-    const target = startId && feedShorts.some((v) => v.id === startId) ? startId : feedShorts[0].id
+    const sid = startIdRef.current
+    const target = sid && feedShorts.some((v) => v.id === sid) ? sid : feedShorts[0].id
     setActiveId(target)
-    requestAnimationFrame(() => {
+    function tryScroll(attempts: number) {
       const el = itemRefs.current.get(target)
       if (el) {
         el.scrollIntoView({ block: 'start' })
-        setTimeout(() => el.scrollIntoView({ block: 'start' }), 100)
-        setTimeout(() => el.scrollIntoView({ block: 'start' }), 300)
+      } else if (attempts > 0) {
+        setTimeout(() => tryScroll(attempts - 1), 150)
       }
-    })
-  }, [loaded, feedShorts, startId])
+    }
+    requestAnimationFrame(() => tryScroll(10))
+  }, [loaded, feedShorts])
 
   async function loadMore() {
     if (searchFeed !== null) {
