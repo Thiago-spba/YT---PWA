@@ -346,7 +346,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
             <button 
               type="button" 
               onClick={() => {
-                userPausedRef.current = !isPlaying // se vai pausar, marca userPaused; se vai dar play, limpa
+                userPausedRef.current = isPlaying // se vai pausar, marca userPaused; se vai dar play, limpa
                 setIsPlaying((p) => !p)
               }} 
               className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white"
@@ -372,4 +372,5 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     </div>
   )
 }
+
 
