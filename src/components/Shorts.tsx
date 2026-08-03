@@ -233,7 +233,11 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
       return
     }
     await loadMoreFeed()
-    setFeed([...originalFeedRef.current, ...feedHook.shorts.slice(originalFeedRef.current.length)])
+    setFeed((current) => {
+      const currentIds = new Set(current.map((v) => v.id))
+      const newOnes = feedHook.shorts.filter((v) => !currentIds.has(v.id))
+      return [...current, ...newOnes]
+    })
   }
 
   function scrollTo(idx: number) {
@@ -372,5 +376,6 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     </div>
   )
 }
+
 
 
