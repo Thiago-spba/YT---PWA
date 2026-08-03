@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Video } from '../types'
 import { isFavorite, recordHistory, recordInterest, removeFromCatalog, toggleFavorite } from '../lib/db'
 import { categorize } from '../lib/categories'
@@ -105,6 +105,8 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
   const searchTokenRef = useRef<string | undefined>(undefined)
   const searchSeenRef = useRef(new Set<string>())
   const originalFeedRef = useRef<Video[]>(initialFeed)
+  /** true se o usuÃ¡rio pausou manualmente o vÃ­deo atual â€” impede auto-advance no ENDED. */
+  const userPausedRef = useRef(false)
 
   const activeVideo = feed[activeIndex] ?? null
   const loadingMore = isSearchMode ? searchLoadingMore : feedLoadingMore
@@ -149,6 +151,17 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     if (activeIndex >= feed.length - 3) loadMore()
   }, [activeIndex])
 
+  /** AvanÃ§a para o prÃ³ximo vÃ­deo do feed (se houver). */
+  const goToNext = useCallback(() => {
+    setActiveIndex((i) => {
+      const next = Math.min(i + 1, feed.length - 1)
+      if (next !== i) {
+        userPausedRef.current = false // reset ao trocar de vÃ­deo
+      }
+      return next
+    })
+  }, [feed.length])
+
   useEffect(() => {
     let cancelled = false
     loadYouTubeApi().then((YT) => {
@@ -173,10 +186,14 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
             if (isPlaying) playerRef.current?.playVideo()
           },
           onStateChange: (e) => { 
+            // YT.PlayerState.ENDED === 0
             if (e.data === 0) {
-              // Autoplay next video when current ends
-              if (activeIndex < feed.length - 1) {
-                scrollTo(activeIndex + 1)
+              // Auto-advance sÃ³ se o usuÃ¡rio NÃƒO pausou manualmente antes de acabar
+              if (!userPausedRef.current) {
+                goToNext()
+              } else {
+                // UsuÃ¡rio pausou antes de acabar â†’ sÃ³ marca como parado
+                setIsPlaying(false)
               }
             }
           },
@@ -189,7 +206,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
       playerRef.current = null
       readyRef.current = false
     }
-  }, [])
+  }, [goToNext])
 
   useEffect(() => {
     if (muted) playerRef.current?.mute()
@@ -328,7 +345,10 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
             </button>
             <button 
               type="button" 
-              onClick={() => setIsPlaying((p) => !p)} 
+              onClick={() => {
+                userPausedRef.current = !isPlaying // se vai pausar, marca userPaused; se vai dar play, limpa
+                setIsPlaying((p) => !p)
+              }} 
               className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white"
             >
               {isPlaying ? <PauseIcon /> : <PlayIcon />}
@@ -352,3 +372,4 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     </div>
   )
 }
+
