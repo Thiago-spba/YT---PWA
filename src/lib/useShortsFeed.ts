@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
 import { listCatalog, updateCatalogVideoFlags } from './db'
 import { getVideoFlags, hasApiKey, searchShortsPage, YoutubeApiError } from './youtube'
 import { DISCOVERY_QUERIES } from './discoveryQueries'
 
-// Cache em nível de módulo (sobrevive a montar/desmontar componentes) —
-// tanto a grade quanto o modo imersivo usam este hook, então reabrir a
-// aba Shorts ou trocar entre grade/imersivo nunca reconsulta a API à toa
+// Cache em nÃ­vel de mÃ³dulo (sobrevive a montar/desmontar componentes) â€”
+// tanto a grade quanto o modo imersivo usam este hook, entÃ£o reabrir a
+// aba Shorts ou trocar entre grade/imersivo nunca reconsulta a API Ã  toa
 // dentro da mesma janela de tempo.
 let cachedDiscovery: Video[] | null = null
 let cachedAt = 0
 const CACHE_TTL_MS = 5 * 60 * 1000
 const checkedIdsThisSession = new Set<string>()
+let sessionSeenIds = new Set<string>() // sobrevive a sair/voltar da tela de Shorts (mesma janela do cache)
 
 export interface ShortsFeed {
   shorts: Video[]
@@ -25,9 +26,9 @@ export interface ShortsFeed {
 }
 
 /**
- * Dados do feed de descoberta de Shorts (catálogo salvo + consultas fixas),
+ * Dados do feed de descoberta de Shorts (catÃ¡logo salvo + consultas fixas),
  * compartilhados entre a grade (`ShortsGrid`) e o modo imersivo (`Shorts`)
- * — extraído daqui pra nenhum dos dois duplicar a lógica de busca/paginação.
+ * â€” extraÃ­do daqui pra nenhum dos dois duplicar a lÃ³gica de busca/paginaÃ§Ã£o.
  */
 export function useShortsFeed(): ShortsFeed {
   const [feedShorts, setFeedShorts] = useState<Video[]>([])
@@ -36,15 +37,15 @@ export function useShortsFeed(): ShortsFeed {
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
 
   const catalogIdsRef = useRef(new Set<string>())
-  const seenIdsRef = useRef(new Set<string>())
+  const seenIdsRef = useRef(sessionSeenIds)
   const pageTokensRef = useRef<Record<string, string | undefined>>({})
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
 
   useEffect(() => {
     // `.catch(() => [])`: se o IndexedDB falhar (sem suporte, bloqueado),
-    // segue com catálogo vazio em vez de deixar `loaded` presa em false
-    // para sempre (tela de Shorts travada em "Carregando…").
+    // segue com catÃ¡logo vazio em vez de deixar `loaded` presa em false
+    // para sempre (tela de Shorts travada em "Carregandoâ€¦").
     listCatalog()
       .catch(() => [])
       .then(async (all) => {
@@ -64,11 +65,11 @@ export function useShortsFeed(): ShortsFeed {
         }
       }
 
-      // Só tenta cada vídeo uma vez por sessão: reabrir a grade/imersivo
+      // SÃ³ tenta cada vÃ­deo uma vez por sessÃ£o: reabrir a grade/imersivo
       // remonta o hook, e sem essa guarda a mesma checagem em lote seria
-      // refeita toda vez — combinada com outras buscas do app, isso
-      // estourava o limite de requisições por período da API do
-      // YouTube (erro 429), mesmo sem estourar a cota diária.
+      // refeita toda vez â€” combinada com outras buscas do app, isso
+      // estourava o limite de requisiÃ§Ãµes por perÃ­odo da API do
+      // YouTube (erro 429), mesmo sem estourar a cota diÃ¡ria.
       const unknown = all.filter((v) => v.isShort === undefined && !checkedIdsThisSession.has(v.id))
       if (unknown.length === 0 || !hasApiKey()) return
       unknown.forEach((v) => checkedIdsThisSession.add(v.id))
@@ -88,7 +89,7 @@ export function useShortsFeed(): ShortsFeed {
           newlyShort.forEach((v) => seenIdsRef.current.add(v.id))
         }
       } catch {
-        // Checagem em segundo plano é best-effort — falha aqui não impede o uso.
+        // Checagem em segundo plano Ã© best-effort â€” falha aqui nÃ£o impede o uso.
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,10 +101,10 @@ export function useShortsFeed(): ShortsFeed {
     if (fresh.length > 0) setFeedShorts((current) => [...current, ...fresh])
   }
 
-  // Só a primeira consulta ao carregar — buscar as várias de uma vez
-  // (mais a checagem de duração de cada uma) é muita requisição junta,
+  // SÃ³ a primeira consulta ao carregar â€” buscar as vÃ¡rias de uma vez
+  // (mais a checagem de duraÃ§Ã£o de cada uma) Ã© muita requisiÃ§Ã£o junta,
   // exatamente o tipo de rajada que derruba a API com erro 429. As
-  // outras entram aos poucos, conforme o usuário rola (loadMore).
+  // outras entram aos poucos, conforme o usuÃ¡rio rola (loadMore).
   async function loadDiscovery() {
     setDiscoveryError(null)
     try {
@@ -114,7 +115,7 @@ export function useShortsFeed(): ShortsFeed {
       cachedAt = Date.now()
       mergeDiscovery(page.videos)
     } catch (err) {
-      setDiscoveryError(err instanceof YoutubeApiError ? err.message : 'Erro ao buscar vídeos.')
+      setDiscoveryError(err instanceof YoutubeApiError ? err.message : 'Erro ao buscar vÃ­deos.')
     }
   }
 
@@ -164,3 +165,5 @@ export function useShortsFeed(): ShortsFeed {
     removeFromFeed,
   }
 }
+
+
