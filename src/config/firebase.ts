@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app'
-import { getAuth, type Auth } from 'firebase/auth'
+import { getAuth, setPersistence, browserLocalPersistence, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -14,6 +14,7 @@ const firebaseConfig = {
 let app: FirebaseApp | null = null
 let auth: Auth | null = null
 let db: Firestore | null = null
+let persistenceInitialized = false
 
 export function getFirebaseApp(): FirebaseApp {
   if (!app) {
@@ -34,6 +35,16 @@ export function getFirebaseApp(): FirebaseApp {
 export function getAuthInstance(): Auth {
   if (!auth) {
     auth = getAuth(getFirebaseApp())
+    // Garante persistência LOCAL (sobrevive a reload/fechar aba) para o anonymous auth.
+    // Só inicializa uma vez.
+    if (!persistenceInitialized) {
+      setPersistence(auth, browserLocalPersistence).catch((err) => {
+        // Em contextos onde localStorage não está disponível (aba anônima, Safari private, etc.),
+        // o SDK cai para 'none' automaticamente. Logamos mas não quebramos o app.
+        console.warn('[Firebase] Falha ao definir persistência LOCAL:', err)
+      })
+      persistenceInitialized = true
+    }
   }
   return auth
 }

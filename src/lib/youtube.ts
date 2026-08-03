@@ -7,10 +7,8 @@ export class NotEmbeddableError extends YoutubeApiError {}
 export class QuotaExceededError extends YoutubeApiError {}
 
 /**
- * 429 e 403 são erros de limite do Google, não bugs do app — mas com
- * mensagem genérica ("Busca falhou (429)") pareciam a mesma coisa.
- * 429 = limite de requisições em um curto período (passa em minutos).
- * 403 = cota diária gratuita esgotada (só volta a funcionar amanhã).
+ * 429 = rate limit temporário (resolve em minutos) — NÃO marca cota esgotada.
+ * 403 = cota diária esgotada (só volta amanhã) — marca cota esgotada.
  */
 function apiErrorMessage(action: 'Busca' | 'Consulta', status: number): string {
   if (status === 429) return `${action} falhou: muitas buscas em pouco tempo. Aguarde alguns minutos e tente de novo.`
@@ -19,13 +17,11 @@ function apiErrorMessage(action: 'Busca' | 'Consulta', status: number): string {
 }
 
 /**
- * Único ponto de acesso à Vercel Function /api/youtube (a chave real vive
- * só lá, no servidor). Antes de qualquer requisição de rede: 1) tenta o
- * cache local (24h) — resultado idêntico não gasta cota de novo; 2) se a
- * cota já foi dada como esgotada nesta sessão, nem tenta a rede. Ao
- * receber 429/403 do proxy, marca a cota como esgotada para o resto da
- * sessão (aba atual), evitando uma rajada de chamadas automáticas contra
- * um limite que já sabemos estar bloqueado.
+ * Único ponto de acesso à Vercel Function /api/youtube.
+ * - Tenta cache local (24h) antes de ir à rede.
+ * - Se cota já foi marcada como esgotada NESTA SESSÃO (403 real), nem tenta a rede.
+ * - 429 NÃO marca cota esgotada; apenas lança erro para o caller decidir retry/backoff.
+ * - 403 marca cota esgotada para o resto da sessão (aba atual).
  */
 async function fetchYoutube(endpoint: 'search' | 'videos', params: Record<string, string>): Promise<any> {
   const query = new URLSearchParams({ endpoint, ...params })
@@ -39,12 +35,22 @@ async function fetchYoutube(endpoint: 'search' | 'videos', params: Record<string
   }
 
   const res = await fetch(`/api/youtube?${query}`)
-  if (res.status === 429 || res.status === 403) {
-    markQuotaExceeded()
+  
+  // 429 = rate limit temporário: NÃO marca quotaExceeded, apenas propaga erro
+  if (res.status === 429) {
+    throw new YoutubeApiError(apiErrorMessage(endpoint === 'search' ? 'Busca' : 'Consulta', 429))
   }
+  
+  // 403 = cota diária esgotada: marca quotaExceeded para evitar rajadas nesta aba
+  if (res.status === 403) {
+    markQuotaExceeded()
+    throw new YoutubeApiError(apiErrorMessage(endpoint === 'search' ? 'Busca' : 'Consulta', 403))
+  }
+  
   if (!res.ok) {
     throw new YoutubeApiError(apiErrorMessage(endpoint === 'search' ? 'Busca' : 'Consulta', res.status))
   }
+  
   const data = await res.json()
   writeYoutubeCache(cacheKey, data)
   return data
