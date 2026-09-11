@@ -1,8 +1,8 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import type { Video } from '../types'
-import { listCatalog, updateCatalogVideoFlags } from './db'
+import { getTopCategories, listCatalog, updateCatalogVideoFlags } from './db'
 import { getVideoFlags, hasApiKey, searchShortsPage, YoutubeApiError } from './youtube'
-import { DISCOVERY_QUERIES } from './discoveryQueries'
+import { buildPersonalizedQueries } from './discoveryQueries'
 
 // Cache em nÃ­vel de mÃ³dulo (sobrevive a montar/desmontar componentes) â€”
 // tanto a grade quanto o modo imersivo usam este hook, entÃ£o reabrir a
@@ -41,6 +41,10 @@ export function useShortsFeed(): ShortsFeed {
   const pageTokensRef = useRef<Record<string, string | undefined>>({})
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
+  // Categorias de maior interesse do usuário (mesmo dado usado pela Home)
+  // — usadas para escolher consultas de descoberta ligadas ao que a
+  // pessoa realmente assiste, em vez das consultas genéricas fixas.
+  const topCategoriesRef = useRef<string[]>([])
 
   useEffect(() => {
     // `.catch(() => [])`: se o IndexedDB falhar (sem suporte, bloqueado),
@@ -56,6 +60,8 @@ export function useShortsFeed(): ShortsFeed {
       })
       setFeedShorts(onlyShorts)
       setLoaded(true)
+
+      topCategoriesRef.current = await getTopCategories(5).catch(() => [])
 
       if (hasApiKey()) {
         if (cachedDiscovery && Date.now() - cachedAt < CACHE_TTL_MS) {
@@ -108,7 +114,7 @@ export function useShortsFeed(): ShortsFeed {
   async function loadDiscovery() {
     setDiscoveryError(null)
     try {
-      const q = DISCOVERY_QUERIES[0]
+      const q = buildPersonalizedQueries(topCategoriesRef.current)[0]
       const page = await searchShortsPage(q)
       pageTokensRef.current[q] = page.nextPageToken
       cachedDiscovery = page.videos
@@ -120,11 +126,12 @@ export function useShortsFeed(): ShortsFeed {
   }
 
   async function loadMore() {
+    const queries = buildPersonalizedQueries(topCategoriesRef.current)
     if (!hasApiKey() || loadingMore) return
-    if (exhaustedRef.current.size >= DISCOVERY_QUERIES.length) return
+    if (exhaustedRef.current.size >= queries.length) return
     let q: string | undefined
-    for (let i = 0; i < DISCOVERY_QUERIES.length; i++) {
-      const candidate = DISCOVERY_QUERIES[queryTurnRef.current % DISCOVERY_QUERIES.length]
+    for (let i = 0; i < queries.length; i++) {
+      const candidate = queries[queryTurnRef.current % queries.length]
       queryTurnRef.current += 1
       if (!exhaustedRef.current.has(candidate)) {
         q = candidate

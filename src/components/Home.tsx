@@ -8,7 +8,7 @@ import { getSuggestions } from '../lib/searchSuggest'
 import { extractVideoId, getVideoById, getVideosByIds, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { QUOTA_EXCEEDED_MESSAGE } from '../lib/youtubeCache'
 import { RECOMMENDED_VIDEO_IDS } from '../config/recommendedVideos'
-import { DISCOVERY_QUERIES as QUERIES } from '../lib/discoveryQueries'
+import { buildPersonalizedQueries } from '../lib/discoveryQueries'
 
 interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
@@ -107,29 +107,33 @@ export default function Home({ onSelect }: Props) {
         setLoading(false)
       })
 
-    getTopCategories(5)
-      .catch(() => [])
-      .then((categories) => {
-        topCategoriesRef.current = categories
-      })
-
     listHistory()
       .catch(() => [])
       .then((h) => {
         historyRef.current = h
       })
 
-    if (!hasApiKey()) return
+    // Espera as categorias de maior interesse chegarem ANTES de montar o
+    // feed inicial — sem isso, a primeira carga da Home sempre caía no
+    // fallback genérico (topCategoriesRef ainda vazio nesse momento),
+    // mesmo para quem já tem histórico de sobra.
+    getTopCategories(5)
+      .catch(() => [])
+      .then((categories) => {
+        topCategoriesRef.current = categories
 
-    if (cachedVideos && Date.now() - cachedAt < CACHE_TTL_MS) {
-      setApiVideos(cachedVideos)
-      cachedVideos.forEach((v) => seenIdsRef.current.add(v.id))
-      return
-    }
+        if (!hasApiKey()) return
 
-    fetchInitial().then((videos) => {
-      if (videos) setApiVideos(videos)
-    })
+        if (cachedVideos && Date.now() - cachedAt < CACHE_TTL_MS) {
+          setApiVideos(cachedVideos)
+          cachedVideos.forEach((v) => seenIdsRef.current.add(v.id))
+          return
+        }
+
+        fetchInitial().then((videos) => {
+          if (videos) setApiVideos(videos)
+        })
+      })
   }, [])
 
   // Embaralha de novo toda vez que a lista de vÃ­deos disponÃ­veis muda
@@ -164,7 +168,8 @@ export default function Home({ onSelect }: Props) {
         }
       }
       
-      const q = QUERIES[0]
+      const queries = buildPersonalizedQueries(topCategoriesRef.current)
+      const q = queries[0]
       const page = await searchVideosPage(q, undefined, 'date')
       pageTokensRef.current[q] = page.nextPageToken
       page.videos.forEach((v) => seenIdsRef.current.add(v.id))
@@ -179,10 +184,11 @@ export default function Home({ onSelect }: Props) {
 
   // Busca a prÃ³xima pÃ¡gina de uma das consultas (revezando entre elas)
   async function loadMore() {
-    if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= QUERIES.length) return
+    const queries = buildPersonalizedQueries(topCategoriesRef.current)
+    if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= queries.length) return
     let query: string | undefined
-    for (let i = 0; i < QUERIES.length; i++) {
-      const candidate = QUERIES[queryTurnRef.current % QUERIES.length]
+    for (let i = 0; i < queries.length; i++) {
+      const candidate = queries[queryTurnRef.current % queries.length]
       queryTurnRef.current += 1
       if (!exhaustedRef.current.has(candidate)) {
         query = candidate

@@ -329,7 +329,10 @@ export default function PlayerHost({
     if (next) onSelect(next)
   }
 
-  const feed = [...catalogFeed, ...suggested]
+  // Vídeos parecidos com o que está tocando agora (busca pelo título)
+  // vêm primeiro; o catálogo salvo (que não tem relação com o vídeo
+  // atual) só entra depois, como complemento.
+  const feed = [...suggested, ...catalogFeed]
 
   const canGoPrev = indexRef.current > 0
   // Usa `feed` (derivado de state, sempre fresco neste render) em vez de

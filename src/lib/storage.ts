@@ -1,3 +1,5 @@
+import type { Video } from '../types'
+
 const KEYS = {
   onboardingDone: 'yt-pwa:onboarding-done',
   pinHash: 'yt-pwa:pin-hash',
@@ -7,7 +9,69 @@ const KEYS = {
   parentalControlEnabled: 'yt-pwa:parental-control-enabled',
   autoplayEnabled: 'yt-pwa:autoplay-enabled',
   keepScreenOnEnabled: 'yt-pwa:keep-screen-on-enabled',
+  lastView: 'yt-pwa:last-view',
+  lastPlaying: 'yt-pwa:last-playing',
+  lastPlayerMode: 'yt-pwa:last-player-mode',
 } as const
+
+/**
+ * Guarda a última tela e o último vídeo abertos, para reabrir o app do
+ * jeito que a pessoa deixou ao atualizar a página (ou fechar e voltar) —
+ * não retoma do segundo exato do vídeo (isso reinicia do início), só
+ * evita que a tela/o player sumam sozinhos.
+ */
+export function getLastView(): string | null {
+  try {
+    return localStorage.getItem(KEYS.lastView)
+  } catch {
+    return null
+  }
+}
+
+export function setLastView(view: string): void {
+  try {
+    localStorage.setItem(KEYS.lastView, view)
+  } catch {
+    // localStorage indisponível (aba anônima/bloqueado) — segue sem persistir.
+  }
+}
+
+export function getLastPlaying(): Video | null {
+  try {
+    const raw = localStorage.getItem(KEYS.lastPlaying)
+    return raw ? (JSON.parse(raw) as Video) : null
+  } catch {
+    return null
+  }
+}
+
+export function setLastPlaying(video: Video | null): void {
+  try {
+    if (video) {
+      localStorage.setItem(KEYS.lastPlaying, JSON.stringify(video))
+    } else {
+      localStorage.removeItem(KEYS.lastPlaying)
+    }
+  } catch {
+    // localStorage indisponível — segue sem persistir.
+  }
+}
+
+export function getLastPlayerMode(): 'mini' | 'expanded' {
+  try {
+    return localStorage.getItem(KEYS.lastPlayerMode) === 'mini' ? 'mini' : 'expanded'
+  } catch {
+    return 'expanded'
+  }
+}
+
+export function setLastPlayerMode(mode: 'mini' | 'expanded'): void {
+  try {
+    localStorage.setItem(KEYS.lastPlayerMode, mode)
+  } catch {
+    // localStorage indisponível — segue sem persistir.
+  }
+}
 
 /** Toca o próximo vídeo da lista automaticamente ao terminar. Ligado por padrão. */
 export function isAutoplayEnabled(): boolean {

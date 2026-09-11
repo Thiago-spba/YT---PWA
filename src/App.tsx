@@ -1,9 +1,15 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   getDailyLimitMinutes,
+  getLastPlaying,
+  getLastPlayerMode,
+  getLastView,
   getUsageMinutesToday,
   isOnboardingDone,
   isParentalControlEnabled,
+  setLastPlaying,
+  setLastPlayerMode,
+  setLastView,
 } from './lib/storage'
 import { applyPendingUpdate } from './lib/pwaUpdate'
 import type { Video } from './types'
@@ -36,6 +42,8 @@ function ScreenFallback() {
 
 type View = 'home' | 'catalog' | 'favorites' | 'playlist' | 'history' | 'shorts'
 
+const VALID_VIEWS: View[] = ['home', 'catalog', 'favorites', 'playlist', 'history', 'shorts']
+
 function limitReachedNow(): boolean {
   if (!isParentalControlEnabled()) return false
   const limit = getDailyLimitMinutes()
@@ -44,9 +52,18 @@ function limitReachedNow(): boolean {
 
 function App() {
   const [onboardingDone, setOnboardingDone] = useState(isOnboardingDone())
-  const [view, setView] = useState<View>('home')
-  const [playing, setPlaying] = useState<Video | null>(null)
-  const [playerMode, setPlayerMode] = useState<PlayerMode>('expanded')
+  // Restaura a última tela e o último vídeo abertos (guardados em
+  // `storage.ts`) — assim, atualizar a página ou fechar e voltar não
+  // joga a pessoa de volta pro Início/sem vídeo. Não retoma o segundo
+  // exato do vídeo (ele recomeça do início), só a tela/o player em si.
+  // Se o limite diário já estava esgotado, não restaura o player — seria
+  // como reabrir algo que o controle parental já tinha encerrado.
+  const [view, setView] = useState<View>(() => {
+    const saved = getLastView()
+    return saved && VALID_VIEWS.includes(saved as View) ? (saved as View) : 'home'
+  })
+  const [playing, setPlaying] = useState<Video | null>(() => (limitReachedNow() ? null : getLastPlaying()))
+  const [playerMode, setPlayerMode] = useState<PlayerMode>(() => getLastPlayerMode())
   const [queue, setQueue] = useState<Video[]>([])
   const [timeUp, setTimeUp] = useState(limitReachedNow())
   const [catalogVersion, setCatalogVersion] = useState(0)
@@ -59,6 +76,20 @@ function App() {
     window.addEventListener('pwa-update-available', handleUpdateAvailable)
     return () => window.removeEventListener('pwa-update-available', handleUpdateAvailable)
   }, [])
+
+  // Persiste tela, vídeo tocando e modo do player a cada mudança, pra
+  // uma atualização de página (ou fechar/voltar) reabrir do mesmo jeito.
+  useEffect(() => {
+    setLastView(view)
+  }, [view])
+
+  useEffect(() => {
+    setLastPlaying(playing)
+  }, [playing])
+
+  useEffect(() => {
+    if (playing) setLastPlayerMode(playerMode)
+  }, [playerMode, playing])
 
   if (!onboardingDone) {
     return (

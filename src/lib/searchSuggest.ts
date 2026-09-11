@@ -18,7 +18,7 @@ import type { HistoryEntry } from '../types'
 import { expandSearchTerm } from './aiSearch'
 
 const MIN_TERM_LENGTH = 3
-const MIN_LOCAL_BEFORE_AI = 0
+const MIN_LOCAL_BEFORE_AI = 3
 const MAX_SUGGESTIONS = 6
 
 const aiCache = new Map<string, string[]>()
