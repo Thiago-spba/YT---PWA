@@ -9,7 +9,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (e não 'autoUpdate') porque o registro real é manual, em
+      // src/lib/pwaUpdate.ts: ele avisa a pessoa (faixa "Nova versão
+      // disponível") e só aplica a atualização quando ela clica, em vez de
+      // recarregar a página sozinho — o que derrubaria um vídeo tocando.
+      registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
