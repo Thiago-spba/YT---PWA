@@ -21,9 +21,11 @@ import type { Video } from '../types'
 import {
   getDailyLimitMinutes,
   hasPin,
+  isDataSaverEnabled,
   isKeepScreenOnEnabled,
   isParentalControlEnabled,
   setDailyLimitMinutes,
+  setDataSaverEnabled,
   setKeepScreenOnEnabled,
   setParentalControlEnabled,
   setPin,
@@ -40,6 +42,7 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
   const [pinExists, setPinExists] = useState(false)
   const [parentalEnabled, setParentalEnabled] = useState(isParentalControlEnabled())
   const [keepScreenOn, setKeepScreenOn] = useState(isKeepScreenOnEnabled())
+  const [dataSaver, setDataSaver] = useState(isDataSaverEnabled())
   const [unlocked, setUnlocked] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [newPinInput, setNewPinInput] = useState('')
@@ -119,6 +122,12 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     const next = !keepScreenOn
     setKeepScreenOn(next)
     setKeepScreenOnEnabled(next)
+  }
+
+  function handleToggleDataSaver() {
+    const next = !dataSaver
+    setDataSaver(next)
+    setDataSaverEnabled(next)
   }
 
   async function handleConnectGoogle() {
@@ -513,6 +522,33 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
                       Este navegador não suporta manter a tela acesa automaticamente.
                     </p>
                   )}
+                </section>
+
+                <section className="border-t border-neutral-200 pt-4 dark:border-neutral-700">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+                        Economizar dados
+                      </h2>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        Toca os vídeos numa qualidade mais baixa para gastar menos internet.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleToggleDataSaver}
+                      aria-label="Economizar dados na reprodução"
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                        dataSaver ? 'bg-violet-600' : 'bg-neutral-300 dark:bg-neutral-700'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+                          dataSaver ? 'left-5' : 'left-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </section>
 
                 <section className="border-t border-neutral-200 pt-4 dark:border-neutral-700">

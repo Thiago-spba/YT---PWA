@@ -6,6 +6,7 @@ import {
   addUsageMinutes,
   getDailyLimitMinutes,
   isAutoplayEnabled,
+  isDataSaverEnabled,
   isKeepScreenOnEnabled,
   isParentalControlEnabled,
   setAutoplayEnabled,
@@ -164,6 +165,8 @@ export default function PlayerHost({
   const [loadingMore, setLoadingMore] = useState(false)
   const [autoplay, setAutoplay] = useState(isAutoplayEnabled())
   const [keepScreenOn, setKeepScreenOn] = useState(isKeepScreenOnEnabled())
+  const [dataSaver, setDataSaver] = useState(isDataSaverEnabled())
+  const dataSaverRef = useRef(dataSaver)
   const [locked, setLocked] = useState(false)
   const [pipActive, setPipActive] = useState(false)
   const [pipMessage, setPipMessage] = useState<string | null>(null)
@@ -201,6 +204,31 @@ export default function PlayerHost({
   // Só mantém a tela acesa enquanto este player existir (vídeo aberto,
   // mini ou expandido) — evita gastar bateria fora da reprodução.
   useWakeLock(keepScreenOn)
+
+  /**
+   * Modo economia de dados: sugere qualidade baixa (~240p) ao player do
+   * YouTube. Não é "só áudio" — o YouTube não oferece isso pelo player
+   * oficial — mas reduz bastante o consumo de internet. Funciona igual
+   * no player normal, no modo "Minimizar" (janelinha dentro do app) e no
+   * Picture-in-Picture (janela flutuante real) — todos usam o mesmo
+   * iframe por baixo, só mudam o tamanho/posição dele na tela.
+   */
+  function applyDataSaverQuality() {
+    playerRef.current?.setPlaybackQuality(dataSaverRef.current ? 'small' : 'default')
+  }
+
+  useEffect(() => {
+    dataSaverRef.current = dataSaver
+    if (readyRef.current) applyDataSaverQuality()
+  }, [dataSaver])
+
+  useEffect(() => {
+    function handleDataSaverChange() {
+      setDataSaver(isDataSaverEnabled())
+    }
+    window.addEventListener('data-saver-changed', handleDataSaverChange)
+    return () => window.removeEventListener('data-saver-changed', handleDataSaverChange)
+  }, [])
 
   useEffect(() => {
     onSelectRef.current = onSelect
@@ -244,6 +272,7 @@ export default function PlayerHost({
           onReady: () => {
             readyRef.current = true
             if (playerRef.current) enablePictureInPicture(playerRef.current)
+            applyDataSaverQuality()
           },
           onError: () => setVideoError(true),
           onStateChange: (e) => {
@@ -403,10 +432,12 @@ export default function PlayerHost({
 
     if (readyRef.current) {
       playerRef.current?.loadVideoById(video.id)
+      applyDataSaverQuality()
     } else {
       const wait = setInterval(() => {
         if (readyRef.current) {
           playerRef.current?.loadVideoById(video.id)
+          applyDataSaverQuality()
           clearInterval(wait)
         }
       }, 150)

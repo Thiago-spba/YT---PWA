@@ -16,6 +16,7 @@ export interface YTPlayer {
   setPlaybackRate: (rate: number) => void
   getPlaybackRate: () => number
   getPlayerState: () => number
+  setPlaybackQuality: (suggestedQuality: string) => void
 }
 
 /**

@@ -9,6 +9,7 @@ const KEYS = {
   parentalControlEnabled: 'yt-pwa:parental-control-enabled',
   autoplayEnabled: 'yt-pwa:autoplay-enabled',
   keepScreenOnEnabled: 'yt-pwa:keep-screen-on-enabled',
+  dataSaverEnabled: 'yt-pwa:data-saver-enabled',
   lastView: 'yt-pwa:last-view',
   lastPlaying: 'yt-pwa:last-playing',
   lastPlayerMode: 'yt-pwa:last-player-mode',
@@ -122,6 +123,35 @@ export function setKeepScreenOnEnabled(enabled: boolean): void {
     // localStorage indisponível (aba anônima/bloqueado) — segue sem persistir.
   }
   window.dispatchEvent(new Event('keep-screen-on-changed'))
+}
+
+/**
+ * Modo economia de dados: força o vídeo a tocar numa qualidade baixa
+ * (~240p) pra gastar bem menos internet. Não existe "só áudio" de
+ * verdade no player oficial do YouTube — essa é a alternativa real
+ * dentro do que a API permite. Desligado por padrão. Mesmo padrão de
+ * evento de `keep-screen-on-changed`, pro player reagir na hora se a
+ * pessoa mudar isso com um vídeo já tocando.
+ */
+export function isDataSaverEnabled(): boolean {
+  try {
+    return localStorage.getItem(KEYS.dataSaverEnabled) === '1'
+  } catch {
+    return false
+  }
+}
+
+export function setDataSaverEnabled(enabled: boolean): void {
+  try {
+    if (enabled) {
+      localStorage.setItem(KEYS.dataSaverEnabled, '1')
+    } else {
+      localStorage.removeItem(KEYS.dataSaverEnabled)
+    }
+  } catch {
+    // localStorage indisponível (aba anônima/bloqueado) — segue sem persistir.
+  }
+  window.dispatchEvent(new Event('data-saver-changed'))
 }
 
 export function isOnboardingDone(): boolean {
