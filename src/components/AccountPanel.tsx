@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
-  connectGoogle,
+  startGoogleConnect,
+  fetchGoogleSession,
   disconnectGoogle,
-  fetchGoogleProfile,
-  isTokenValid,
-  GoogleAuthError,
   type GoogleProfile,
 } from '../lib/googleAuth'
 import {
@@ -64,6 +62,54 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     hasPin().then(setPinExists)
     const current = getDailyLimitMinutes()
     setLimit(current ? String(current) : '')
+  }, [])
+
+  // Depois do redirecionamento de volta do Google (api/auth/google-callback),
+  // a URL vem com ?google=connected ou ?google_error=... — lê isso uma vez e
+  // limpa da URL, pra não ficar reprocessando se a pessoa atualizar a página.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const googleStatus = params.get('google')
+    const googleErrorParam = params.get('google_error')
+    if (!googleStatus && !googleErrorParam) return
+
+    params.delete('google')
+    params.delete('google_error')
+    const rest = params.toString()
+    window.history.replaceState({}, '', window.location.pathname + (rest ? `?${rest}` : ''))
+
+    if (googleErrorParam) {
+      setGoogleError(
+        googleErrorParam === 'denied'
+          ? 'Conexão cancelada.'
+          : 'Não foi possível conectar com o Google. Tente novamente.',
+      )
+    }
+  }, [])
+
+  // Ao abrir o app, pergunta ao servidor se a conta Google já está
+  // conectada (via cookie) — sem isso ser guardado em nenhum lugar do
+  // navegador. Some right after connecting, too, since google-callback
+  // manda de volta com a mesma origem/página.
+  useEffect(() => {
+    let cancelled = false
+    fetchGoogleSession().then(async (session) => {
+      if (cancelled) return
+      setGoogleConnected(session.connected)
+      setProfile(session.profile)
+      if (!session.connected) return
+      try {
+        const [subs, pls] = await Promise.all([listMySubscriptions(), listMyPlaylists()])
+        if (cancelled) return
+        setSubscriptions(subs)
+        setPlaylists(pls)
+      } catch {
+        // Silencioso — a seção já mostra "conectado", só sem as listas.
+      }
+    })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const needsPinToView = parentalEnabled && !unlocked
@@ -130,33 +176,13 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     setDataSaverEnabled(next)
   }
 
-  async function handleConnectGoogle() {
-    setGoogleLoading(true)
+  function handleConnectGoogle() {
     setGoogleError(null)
-    try {
-      await connectGoogle()
-      setGoogleConnected(true)
-      const [userProfile, subs, pls] = await Promise.all([
-        fetchGoogleProfile(),
-        listMySubscriptions(),
-        listMyPlaylists(),
-      ])
-      setProfile(userProfile)
-      setSubscriptions(subs)
-      setPlaylists(pls)
-    } catch (err) {
-      setGoogleError(
-        err instanceof GoogleAuthError || err instanceof GoogleYoutubeError
-          ? err.message
-          : 'Não foi possível conectar com o Google.',
-      )
-    } finally {
-      setGoogleLoading(false)
-    }
+    startGoogleConnect()
   }
 
-  function handleDisconnectGoogle() {
-    disconnectGoogle()
+  async function handleDisconnectGoogle() {
+    await disconnectGoogle()
     setGoogleConnected(false)
     setProfile(null)
     setSubscriptions([])
@@ -165,12 +191,17 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
     setActivePlaylist(null)
   }
 
-  async function handleOpenPlaylist(playlistId: string) {
-    if (!isTokenValid()) {
-      setGoogleError('Conexão com o Google expirou — toque em "Conectar com Google" para continuar.')
+  /** true = tratado (conexão caiu, UI já atualizada); false = erro comum, ainda precisa ser exibido pelo chamador. */
+  function handleAuthExpired(err: unknown): boolean {
+    if (err instanceof GoogleYoutubeError && err.code === 'unauthenticated') {
       setGoogleConnected(false)
-      return
+      setGoogleError('Conexão com o Google expirou — toque em "Conectar com Google" para continuar.')
+      return true
     }
+    return false
+  }
+
+  async function handleOpenPlaylist(playlistId: string) {
     setGoogleLoading(true)
     setGoogleError(null)
     try {
@@ -178,7 +209,9 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
       setActivePlaylist(playlistId)
       setSelected(new Set())
     } catch (err) {
-      setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao abrir playlist.')
+      if (!handleAuthExpired(err)) {
+        setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao abrir playlist.')
+      }
     } finally {
       setGoogleLoading(false)
     }
@@ -224,11 +257,6 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
   }
 
   async function handleImportEntirePlaylist(playlistId: string) {
-    if (!isTokenValid()) {
-      setGoogleError('Conexão com o Google expirou — toque em "Conectar com Google" para continuar.')
-      setGoogleConnected(false)
-      return
-    }
     setGoogleLoading(true)
     setGoogleError(null)
     try {
@@ -239,18 +267,15 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
       setImportStatus(`${videos.length} vídeo(s) importados dessa playlist.${skippedSuffix(skipped)}`)
       if (videos.length > 0) onCatalogChanged()
     } catch (err) {
-      setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar playlist.')
+      if (!handleAuthExpired(err)) {
+        setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar playlist.')
+      }
     } finally {
       setGoogleLoading(false)
     }
   }
 
   async function handleImportAll() {
-    if (!isTokenValid()) {
-      setGoogleError('Conexão com o Google expirou — toque em "Conectar com Google" para continuar.')
-      setGoogleConnected(false)
-      return
-    }
     setGoogleLoading(true)
     setGoogleError(null)
     let total = 0
@@ -264,7 +289,8 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
           }
           total += videos.length
           totalSkipped += skipped
-        } catch {
+        } catch (err) {
+          if (handleAuthExpired(err)) break
           continue
         }
       }
@@ -273,7 +299,9 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
       )
       if (total > 0) onCatalogChanged()
     } catch (err) {
-      setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar tudo.')
+      if (!handleAuthExpired(err)) {
+        setGoogleError(err instanceof GoogleYoutubeError ? err.message : 'Erro ao importar tudo.')
+      }
     } finally {
       setGoogleLoading(false)
     }
@@ -387,16 +415,6 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
 
                   {googleError && (
                     <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">{googleError}</p>
-                  )}
-
-                  {googleConnected && !isTokenValid() && (
-                    <button
-                      type="button"
-                      onClick={handleConnectGoogle}
-                      className="mt-2 w-full rounded bg-amber-100 px-3 py-2 text-sm text-amber-800 hover:bg-amber-200 dark:bg-amber-950 dark:text-amber-200"
-                    >
-                      Conexão expirou — toque para reconectar
-                    </button>
                   )}
 
                   {googleConnected && (
