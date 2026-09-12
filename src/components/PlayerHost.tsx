@@ -29,6 +29,18 @@ function findNaturalNext(all: Video[], currentId: string, fallback: Video[]): Vi
   return fallback[0]
 }
 
+// Embaralha a ordem de "A seguir" a cada vídeo aberto — sem isso, o
+// catálogo salvo sempre aparecia na mesma sequência fixa, dando a
+// impressão de que a lista "nunca muda" mesmo trocando de vídeo.
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
 export type PlayerMode = 'mini' | 'expanded'
 
 interface Props {
@@ -219,7 +231,15 @@ export default function PlayerHost({
         host: 'https://www.youtube-nocookie.com',
         width: '100%',
         height: '100%',
-        playerVars: { rel: 0, autoplay: 1, modestbranding: 1, origin: window.location.origin },
+        // cc_load_policy: 0 — não mostra legenda automaticamente; a
+        // pessoa ainda pode ligar na mão pelos controles do player.
+        playerVars: {
+          rel: 0,
+          autoplay: 1,
+          modestbranding: 1,
+          cc_load_policy: 0,
+          origin: window.location.origin,
+        },
         events: {
           onReady: () => {
             readyRef.current = true
@@ -364,7 +384,7 @@ export default function PlayerHost({
       .then((all) => {
         catalogAllRef.current = all
         const filtered = all.filter((v) => v.id !== video.id)
-        setCatalogFeed(filtered)
+        setCatalogFeed(shuffle(filtered))
 
         // Buscar "parecidos por título" custa uma unidade da cota de
         // BUSCA da API do YouTube — bem mais escassa (e separada) da
@@ -374,7 +394,7 @@ export default function PlayerHost({
         if (hasApiKey() && filtered.length < MIN_CATALOG_BEFORE_SEARCH) {
           searchVideosPage(video.title)
             .then((page) => {
-              setSuggested(page.videos.filter((v) => v.id !== video.id))
+              setSuggested(shuffle(page.videos.filter((v) => v.id !== video.id)))
               setNextPageToken(page.nextPageToken)
             })
             .catch(() => {})
