@@ -128,6 +128,11 @@ const iconButtonClassDark =
 const miniButtonClass =
   'flex h-6 w-6 items-center justify-center rounded text-white hover:bg-white/20'
 
+// Abaixo disso, "A seguir" busca vídeos parecidos por título na API
+// (gasta cota de busca); com pelo menos essa quantidade no catálogo
+// salvo, usa só o catálogo e economiza a cota.
+const MIN_CATALOG_BEFORE_SEARCH = 8
+
 export default function PlayerHost({
   video,
   mode,
@@ -351,23 +356,30 @@ export default function PlayerHost({
       .catch(() => {})
     setVideoError(false)
 
+    setSuggested([])
+    setNextPageToken(undefined)
+
     listCatalog()
       .catch(() => [])
       .then((all) => {
         catalogAllRef.current = all
-        setCatalogFeed(all.filter((v) => v.id !== video.id))
-      })
+        const filtered = all.filter((v) => v.id !== video.id)
+        setCatalogFeed(filtered)
 
-    setSuggested([])
-    setNextPageToken(undefined)
-    if (hasApiKey()) {
-      searchVideosPage(video.title)
-        .then((page) => {
-          setSuggested(page.videos.filter((v) => v.id !== video.id))
-          setNextPageToken(page.nextPageToken)
-        })
-        .catch(() => {})
-    }
+        // Buscar "parecidos por título" custa uma unidade da cota de
+        // BUSCA da API do YouTube — bem mais escassa (e separada) da
+        // cota geral, e gasta rápido porque isso rodava a cada vídeo
+        // aberto. Só faz essa busca quando o catálogo salvo já não tem
+        // vídeos suficientes pra preencher "A seguir" sozinho.
+        if (hasApiKey() && filtered.length < MIN_CATALOG_BEFORE_SEARCH) {
+          searchVideosPage(video.title)
+            .then((page) => {
+              setSuggested(page.videos.filter((v) => v.id !== video.id))
+              setNextPageToken(page.nextPageToken)
+            })
+            .catch(() => {})
+        }
+      })
 
     if (readyRef.current) {
       playerRef.current?.loadVideoById(video.id)
