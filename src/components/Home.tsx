@@ -14,13 +14,13 @@ interface Props {
   onSelect: (video: Video, queue?: Video[]) => void
 }
 
-// Cache curto em memÃ³ria: sem isso, cada vez que o usuÃ¡rio voltava
-// para "InÃ­cio" â€” a aba padrÃ£o â€” o app disparava buscas novas, mesmo
+// Cache curto em memória: sem isso, cada vez que o usuário voltava
+// para "Início" — a aba padrão — o app disparava buscas novas, mesmo
 // trocando de aba e voltando em segundos. Isso esgotava o limite de
-// requisiÃ§Ãµes da API rÃ¡pido, causando erro 403/429 em outras telas
+// requisições da API rápido, causando erro 403/429 em outras telas
 // (como Shorts) depois de pouco uso. 5 minutos segura esse limite sem
-// deixar o feed velho â€” a ordem tambÃ©m muda a cada visita, e dÃ¡ pra
-// forÃ§ar vÃ­deos novos na hora com o botÃ£o "Atualizar".
+// deixar o feed velho — a ordem também muda a cada visita, e dá pra
+// forçar vídeos novos na hora com o botão "Atualizar".
 let cachedVideos: Video[] | null = null
 let cachedAt = 0
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -52,9 +52,9 @@ function RefreshIcon() {
 }
 
 export default function Home({ onSelect }: Props) {
-  // CatÃ¡logo salvo (local, sem custo de cota) e vÃ­deos da API ficam em
-  // estados separados â€” assim dÃ¡ pra saber quais cartÃµes tÃªm lixeira
-  // (sÃ³ os salvos) e "Atualizar" nÃ£o perde o que jÃ¡ carregou.
+  // Catálogo salvo (local, sem custo de cota) e vídeos da API ficam em
+  // estados separados — assim dá pra saber quais cartões têm lixeira
+  // (só os salvos) e "Atualizar" não perde o que já carregou.
   const [catalogVideos, setCatalogVideos] = useState<Video[]>([])
   const [apiVideos, setApiVideos] = useState<Video[]>([])
   const [order, setOrder] = useState<string[]>([])
@@ -64,18 +64,18 @@ export default function Home({ onSelect }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   // Rolagem infinita do feed geral: gira entre as consultas fixas,
-  // guardando o nextPageToken de cada uma â€” nunca fica sem vÃ­deo novo
-  // enquanto pelo menos uma consulta ainda tiver pÃ¡ginas.
+  // guardando o nextPageToken de cada uma — nunca fica sem vídeo novo
+  // enquanto pelo menos uma consulta ainda tiver páginas.
   const seenIdsRef = useRef(new Set<string>())
   const pageTokensRef = useRef<Record<string, string | undefined>>({})
   const exhaustedRef = useRef(new Set<string>())
   const queryTurnRef = useRef(0)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   
-  // Categorias com maior pontuaÃ§Ã£o de interesse (item 3, recomendaÃ§Ã£o
-  // por histÃ³rico) â€” carregadas uma vez do IndexedDB e usadas para
-  // priorizar novos vÃ­deos que entram no feed, sem precisar re-renderizar
-  // por causa disso (fica num ref, nÃ£o em state).
+  // Categorias com maior pontuação de interesse (item 3, recomendação
+  // por histórico) — carregadas uma vez do IndexedDB e usadas para
+  // priorizar novos vídeos que entram no feed, sem precisar re-renderizar
+  // por causa disso (fica num ref, não em state).
   const topCategoriesRef = useRef<string[]>([])
 
   // Busca inteligente (autocomplete + resultados)
@@ -84,7 +84,7 @@ export default function Home({ onSelect }: Props) {
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   
-  // HistÃ³rico de vÃ­deos assistidos (item 3), corpus da Fonte 1 do
+  // Histórico de vídeos assistidos (item 3), corpus da Fonte 1 do
   // autocomplete.
   const historyRef = useRef<HistoryEntry[]>([])
   const [searchQuery, setSearchQuery] = useState<string | null>(null)
@@ -98,7 +98,7 @@ export default function Home({ onSelect }: Props) {
   const boxRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    // O catÃ¡logo salvo Ã© local e sempre disponÃ­vel
+    // O catálogo salvo é local e sempre disponível
     listCatalog()
       .catch(() => [])
       .then((videos) => {
@@ -136,7 +136,7 @@ export default function Home({ onSelect }: Props) {
       })
   }, [])
 
-  // Embaralha de novo toda vez que a lista de vÃ­deos disponÃ­veis muda
+  // Embaralha de novo toda vez que a lista de vídeos disponíveis muda
   useEffect(() => {
     setOrder((current) => {
       const all = [...catalogVideos, ...apiVideos]
@@ -154,7 +154,7 @@ export default function Home({ onSelect }: Props) {
     })
   }, [catalogVideos, apiVideos])
 
-  // Abordagem hÃ­brida (custo de cota)
+  // Abordagem híbrida (custo de cota)
   async function fetchInitial(): Promise<Video[] | null> {
     try {
       if (RECOMMENDED_VIDEO_IDS.length > 0) {
@@ -182,7 +182,7 @@ export default function Home({ onSelect }: Props) {
     }
   }
 
-  // Busca a prÃ³xima pÃ¡gina de uma das consultas (revezando entre elas)
+  // Busca a próxima página de uma das consultas (revezando entre elas)
   async function loadMore() {
     const queries = buildPersonalizedQueries(topCategoriesRef.current)
     if (!hasApiKey() || loadingMore || exhaustedRef.current.size >= queries.length) return
@@ -228,7 +228,7 @@ export default function Home({ onSelect }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingMore])
 
-  // BotÃ£o "Atualizar"
+  // Botão "Atualizar"
   async function handleRefresh() {
     if (!hasApiKey() || refreshing) return
     setRefreshing(true)
@@ -308,14 +308,14 @@ export default function Home({ onSelect }: Props) {
           ? await getVideoById(id)
           : { id, title: id, channelTitle: '', thumbnailUrl: `https://i.ytimg.com/vi/${id}/mqdefault.jpg` }
         if (!video) {
-          setSearchStatus('VÃ­deo nÃ£o encontrado.')
+          setSearchStatus('Vídeo não encontrado.')
           return
         }
         onSelect(video)
         setInput('')
       } else if (hasApiKey()) {
         recordInterest(categorize(value)).catch(() => {})
-        // Expande o termo em sinÃ´nimos via IA e combina tudo com OR
+        // Expande o termo em sinônimos via IA e combina tudo com OR
         const extraTerms = await expandSearchTerm(value)
         const combinedQuery = extraTerms.length > 0 ? [value, ...extraTerms].join('|') : value
         searchSeenRef.current = new Set()
@@ -326,7 +326,7 @@ export default function Home({ onSelect }: Props) {
         setSearchQuery(combinedQuery)
       } else {
         setSearchStatus(
-          'Isso nÃ£o parece um link do YouTube. Para buscar por texto, a busca precisa estar configurada.',
+          'Isso não parece um link do YouTube. Para buscar por texto, a busca precisa estar configurada.',
         )
       }
     } catch (err) {
@@ -401,7 +401,7 @@ export default function Home({ onSelect }: Props) {
                 })
             }}
             placeholder={
-              hasApiKey() ? 'Buscar ou colar link de vÃ­deo do YouTube' : 'Colar link de vÃ­deo do YouTube'
+              hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
             }
             autoComplete="off"
             className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-900 placeholder-neutral-500 shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder-neutral-400"
@@ -420,7 +420,7 @@ export default function Home({ onSelect }: Props) {
         {showSuggestions && (suggestLoading || suggestions.length > 0) && (
           <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-800">
             {suggestLoading && suggestions.length === 0 && (
-              <p className="p-3 text-sm text-neutral-500 dark:text-neutral-400">Buscando sugestÃµesâ€¦</p>
+              <p className="p-3 text-sm text-neutral-500 dark:text-neutral-400">Buscando sugestões…</p>
             )}
             {suggestions.map((term) => (
               <button
@@ -449,7 +449,7 @@ export default function Home({ onSelect }: Props) {
 
       {searchLoading && !searchResults && (
         <p className="mx-auto mb-4 max-w-2xl text-center text-sm text-neutral-500 dark:text-neutral-400">
-          Buscandoâ€¦
+          Buscando…
         </p>
       )}
 
@@ -466,7 +466,7 @@ export default function Home({ onSelect }: Props) {
             </button>
           </div>
           {searchResults.length === 0 ? (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Nenhum vÃ­deo encontrado.</p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Nenhum vídeo encontrado.</p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
@@ -477,7 +477,7 @@ export default function Home({ onSelect }: Props) {
               <div ref={searchSentinelRef} className="h-4" />
               {searchLoadingMore && (
                 <p className="mt-2 text-center text-sm text-neutral-500 dark:text-neutral-400">
-                  Carregando mais resultadosâ€¦
+                  Carregando mais resultados…
                 </p>
               )}
             </>
@@ -486,7 +486,7 @@ export default function Home({ onSelect }: Props) {
       )}
 
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">{searchResults ? 'Mais vÃ­deos' : 'InÃ­cio'}</h2>
+        <h2 className="text-lg font-semibold">{searchResults ? 'Mais vídeos' : 'Início'}</h2>
         {hasApiKey() && (
           <button
             type="button"
@@ -495,12 +495,12 @@ export default function Home({ onSelect }: Props) {
             className="flex items-center gap-1.5 rounded-full border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
           >
             <RefreshIcon />
-            {refreshing ? 'Atualizandoâ€¦' : 'Atualizar'}
+            {refreshing ? 'Atualizando…' : 'Atualizar'}
           </button>
         )}
       </div>
       {loading && videos.length === 0 && (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">Carregandoâ€¦</p>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">Carregando…</p>
       )}
       {error && videos.length === 0 && (
         <p
@@ -515,7 +515,7 @@ export default function Home({ onSelect }: Props) {
       )}
       {!loading && !error && videos.length === 0 && (
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          Nenhum vÃ­deo por aqui ainda. Busque acima ou adicione vÃ­deos em "Meus Canais" para comeÃ§ar.
+          Nenhum vídeo por aqui ainda. Busque acima ou adicione vídeos em "Meus Canais" para começar.
         </p>
       )}
       {videos.length > 0 && (
@@ -533,7 +533,7 @@ export default function Home({ onSelect }: Props) {
           <div ref={sentinelRef} className="h-4" />
           {loadingMore && (
             <p className="mt-2 text-center text-sm text-neutral-500 dark:text-neutral-400">
-              Carregando mais vÃ­deosâ€¦
+              Carregando mais vídeos…
             </p>
           )}
         </>

@@ -105,7 +105,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
   const searchTokenRef = useRef<string | undefined>(undefined)
   const searchSeenRef = useRef(new Set<string>())
   const originalFeedRef = useRef<Video[]>(initialFeed)
-  /** true se o usuÃ¡rio pausou manualmente o vÃ­deo atual â€” impede auto-advance no ENDED. */
+  /** true se o usuário pausou manualmente o vídeo atual — impede auto-advance no ENDED. */
   const userPausedRef = useRef(false)
 
   const activeVideo = feed[activeIndex] ?? null
@@ -151,12 +151,12 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     if (activeIndex >= feed.length - 3) loadMore()
   }, [activeIndex])
 
-  /** AvanÃ§a para o prÃ³ximo vÃ­deo do feed (se houver). */
+  /** Avança para o próximo vídeo do feed (se houver). */
   const goToNext = useCallback(() => {
     setActiveIndex((i) => {
       const next = Math.min(i + 1, feed.length - 1)
       if (next !== i) {
-        userPausedRef.current = false // reset ao trocar de vÃ­deo
+        userPausedRef.current = false // reset ao trocar de vídeo
       }
       return next
     })
@@ -188,11 +188,11 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
           onStateChange: (e) => { 
             // YT.PlayerState.ENDED === 0
             if (e.data === 0) {
-              // Auto-advance sÃ³ se o usuÃ¡rio NÃƒO pausou manualmente antes de acabar
+              // Auto-advance só se o usuário NÃO pausou manualmente antes de acabar
               if (!userPausedRef.current) {
                 goToNext()
               } else {
-                // UsuÃ¡rio pausou antes de acabar â†’ sÃ³ marca como parado
+                // Usuário pausou antes de acabar → só marca como parado
                 setIsPlaying(false)
               }
             }
