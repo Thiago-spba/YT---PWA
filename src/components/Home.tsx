@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import type { HistoryEntry, Video } from '../types'
 import VideoCard from './VideoCard'
-import { getTopCategories, listCatalog, listHistory, recordInterest, removeFromCatalog } from '../lib/db'
+import { getTopCategories, listCatalog, listHistory, listSearchHistory, recordInterest, recordSearch, removeFromCatalog } from '../lib/db'
 import { categorize, categorizeByYouTubeId } from '../lib/categories'
 import { expandSearchTerm } from '../lib/aiSearch'
 import { getSuggestions } from '../lib/searchSuggest'
@@ -84,9 +84,12 @@ export default function Home({ onSelect }: Props) {
   const [suggestLoading, setSuggestLoading] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
   
-  // Histórico de vídeos assistidos (item 3), corpus da Fonte 1 do
+  // Histórico de vídeos assistidos (item 3), corpus da Fonte 2 do
   // autocomplete.
   const historyRef = useRef<HistoryEntry[]>([])
+  // Termos que você já buscou antes (Fonte 1 do autocomplete, independente
+  // de ter assistido algo daquela busca).
+  const searchHistoryRef = useRef<string[]>([])
   const [searchQuery, setSearchQuery] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<Video[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -111,6 +114,12 @@ export default function Home({ onSelect }: Props) {
       .catch(() => [])
       .then((h) => {
         historyRef.current = h
+      })
+
+    listSearchHistory()
+      .catch(() => [])
+      .then((terms) => {
+        searchHistoryRef.current = terms
       })
 
     // Espera as categorias de maior interesse chegarem ANTES de montar o
@@ -264,7 +273,7 @@ export default function Home({ onSelect }: Props) {
     setSuggestLoading(true)
     // Debounce de 300ms
     const timer = setTimeout(() => {
-      getSuggestions(value, historyRef.current, hasApiKey())
+      getSuggestions(value, historyRef.current, hasApiKey(), searchHistoryRef.current)
         .then((terms) => {
           if (active) setSuggestions(terms)
         })
@@ -321,6 +330,11 @@ export default function Home({ onSelect }: Props) {
         setInput('')
       } else if (hasApiKey()) {
         recordInterest(categorize(value)).catch(() => {})
+        recordSearch(value).catch(() => {})
+        searchHistoryRef.current = [
+          value,
+          ...searchHistoryRef.current.filter((t) => t.toLowerCase() !== value.toLowerCase()),
+        ].slice(0, 50)
         // Expande o termo em sinônimos via IA e combina tudo com OR
         const extraTerms = await expandSearchTerm(value)
         const combinedQuery = extraTerms.length > 0 ? [value, ...extraTerms].join('|') : value

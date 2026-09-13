@@ -1,12 +1,18 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
 import type { CatalogEntry, HistoryEntry, InterestEntry, PlaylistEntry, Video } from '../types'
 
+interface SearchHistoryEntry {
+  term: string
+  searchedAt: number
+}
+
 interface YtPwaDB extends DBSchema {
   catalog: { key: string; value: CatalogEntry }
   favorites: { key: string; value: CatalogEntry }
   history: { key: string; value: HistoryEntry }
   playlist: { key: string; value: PlaylistEntry }
   interests: { key: string; value: InterestEntry }
+  searchHistory: { key: string; value: SearchHistoryEntry }
 }
 
 let dbPromise: Promise<IDBPDatabase<YtPwaDB>> | null = null
@@ -17,7 +23,7 @@ function getDB() {
     // InvalidStateError), não guarda a promise rejeitada — assim a próxima
     // chamada tenta abrir de novo em vez de falhar para sempre com o
     // mesmo erro cacheado.
-    dbPromise = openDB<YtPwaDB>('yt-pwa', 4, {
+    dbPromise = openDB<YtPwaDB>('yt-pwa', 5, {
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           db.createObjectStore('catalog', { keyPath: 'id' })
@@ -29,6 +35,9 @@ function getDB() {
         }
         if (oldVersion < 3) {
           db.createObjectStore('interests', { keyPath: 'category' })
+        }
+        if (oldVersion < 5) {
+          db.createObjectStore('searchHistory', { keyPath: 'term' })
         }
       },
     }).catch((err) => {
@@ -261,4 +270,32 @@ export async function getTopCategories(limit = 5): Promise<string[]> {
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
     .map((entry) => entry.category)
+}
+
+// Quantos termos de busca guardar no máximo — histórico de BUSCAS digitadas
+// (diferente do histórico de vídeos assistidos acima), usado só para
+// reaparecer no autocomplete. Sem limite, cresceria pra sempre.
+const MAX_SEARCH_HISTORY = 50
+
+/** Registra um termo buscado (texto digitado, não vídeo assistido). Busca repetida só atualiza a data. */
+export async function recordSearch(term: string): Promise<void> {
+  const clean = term.trim()
+  if (!clean) return
+  const db = await getDB()
+  await db.put('searchHistory', { term: clean, searchedAt: Date.now() })
+
+  const all = await db.getAll('searchHistory')
+  if (all.length > MAX_SEARCH_HISTORY) {
+    const oldest = all.sort((a, b) => a.searchedAt - b.searchedAt).slice(0, all.length - MAX_SEARCH_HISTORY)
+    const tx = db.transaction('searchHistory', 'readwrite')
+    await Promise.all(oldest.map((entry) => tx.store.delete(entry.term)))
+    await tx.done
+  }
+}
+
+/** Termos buscados antes, do mais recente pro mais antigo — usado como fonte do autocomplete. */
+export async function listSearchHistory(): Promise<string[]> {
+  const db = await getDB()
+  const all = await db.getAll('searchHistory')
+  return all.sort((a, b) => b.searchedAt - a.searchedAt).map((entry) => entry.term)
 }

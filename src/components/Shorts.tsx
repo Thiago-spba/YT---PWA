@@ -185,6 +185,18 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
             readyRef.current = true
             if (isPlaying) playerRef.current?.playVideo()
           },
+          // O dono do vídeo pode bloquear a exibição fora do YouTube (ex.:
+          // conteúdo de rádio/TV ao vivo com restrição de "syndication") sem
+          // isso aparecer no status.embeddable checado antes — nesse caso o
+          // YouTube carrega uma tela de erro própria dentro do player (às
+          // vezes até malrenderizada, mostrando a marcação HTML crua). Como
+          // isso não é algo que o app controla ou consegue consertar (é
+          // conteúdo de outra origem, do próprio YouTube), a solução é pular
+          // pro próximo Short automaticamente, do jeito que um feed de
+          // Shorts de verdade se comportaria.
+          onError: () => {
+            goToNext()
+          },
           onStateChange: (e) => { 
             // YT.PlayerState.ENDED === 0
             if (e.data === 0) {
