@@ -2,7 +2,7 @@
 import type { HistoryEntry, Video } from '../types'
 import VideoCard from './VideoCard'
 import { getTopCategories, listCatalog, listHistory, recordInterest, removeFromCatalog } from '../lib/db'
-import { categorize } from '../lib/categories'
+import { categorize, categorizeByYouTubeId } from '../lib/categories'
 import { expandSearchTerm } from '../lib/aiSearch'
 import { getSuggestions } from '../lib/searchSuggest'
 import { extractVideoId, getVideoById, getVideosByIds, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
@@ -145,7 +145,13 @@ export default function Home({ onSelect }: Props) {
       const top = topCategoriesRef.current
       const prioritizedIds = new Set(
         top.length > 0
-          ? fresh.filter((v) => categorize(`${v.title} ${v.channelTitle}`).some((c) => top.includes(c))).map((v) => v.id)
+          ? fresh
+              .filter((v) =>
+                [...categorize(`${v.title} ${v.channelTitle}`), ...categorizeByYouTubeId(v.categoryId)].some((c) =>
+                  top.includes(c),
+                ),
+              )
+              .map((v) => v.id)
           : [],
       )
       const prioritized = fresh.filter((v) => prioritizedIds.has(v.id)).map((v) => v.id)

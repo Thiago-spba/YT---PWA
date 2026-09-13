@@ -1,7 +1,7 @@
 ﻿import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Video } from '../types'
-import { isFavorite, recordHistory, recordInterest, removeFromCatalog, toggleFavorite } from '../lib/db'
-import { categorize } from '../lib/categories'
+import { isFavorite, recordHistory, removeFromCatalog, toggleFavorite } from '../lib/db'
+import { recordVideoInterest } from '../lib/interest'
 import { hasApiKey, searchShortsPage, YoutubeApiError } from '../lib/youtube'
 import { loadYouTubeApi, type YTPlayer } from '../lib/youtubePlayer'
 import type { ShortsFeed } from '../lib/useShortsFeed'
@@ -115,7 +115,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
     if (feed.length === 0) return
     const v = feed[0]
     recordHistory(v).catch(() => {})
-    recordInterest(categorize(v.title + ' ' + v.channelTitle), 2).catch(() => {})
+    recordVideoInterest(v, 2).catch(() => {})
     isFavorite(v.id).then(setFavorite).catch(() => {})
     function tryLoad() {
       if (readyRef.current) {
@@ -134,7 +134,7 @@ export default function Shorts({ initialFeed, feedHook, onBack }: Props) {
   useEffect(() => {
     if (!activeVideo || activeIndex === 0) return
     recordHistory(activeVideo).catch(() => {})
-    recordInterest(categorize(activeVideo.title + ' ' + activeVideo.channelTitle), 2).catch(() => {})
+    recordVideoInterest(activeVideo, 2).catch(() => {})
     isFavorite(activeVideo.id).then(setFavorite).catch(() => {})
     function tryLoad() {
       if (readyRef.current) {

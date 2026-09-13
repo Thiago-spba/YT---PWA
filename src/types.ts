@@ -5,6 +5,8 @@ export interface Video {
   thumbnailUrl: string
   isShort?: boolean
   durationSeconds?: number
+  /** categoria oficial do YouTube (snippet.categoryId da Data API), quando disponível */
+  categoryId?: string
 }
 
 export interface HistoryEntry extends Video {

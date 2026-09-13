@@ -42,6 +42,26 @@ const SYSTEM_PROMPT =
   'sem inventar conteúdo — apenas reformule/expanda o termo em variações ' +
   'plausíveis que alguém buscaria pelo mesmo assunto.'
 
+/**
+ * O modelo às vezes devolve o JSON embrulhado em um bloco de código
+ * markdown (```json ... ``` ou ``` ... ```), mesmo quando instruído a
+ * responder "apenas" com JSON — isso é comportamento comum de LLMs e
+ * estava causando falha 100% das vezes em JSON.parse (SyntaxError:
+ * Unexpected token '`'), derrubando a busca inteligente inteira com 502.
+ * Remove esse invólucro antes de tentar o parse.
+ */
+function extractJson(text: string): string {
+  const trimmed = text.trim()
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  if (fenced) return fenced[1].trim()
+  // Sem crases, mas pode ter texto antes/depois do objeto — pega só o
+  // primeiro '{' até o último '}' como salvaguarda extra.
+  const start = trimmed.indexOf('{')
+  const end = trimmed.lastIndexOf('}')
+  if (start !== -1 && end !== -1 && end > start) return trimmed.slice(start, end + 1)
+  return trimmed
+}
+
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Método não permitido.' })
@@ -77,7 +97,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     })
 
     const textBlock = response.content.find((block): block is Anthropic.TextBlock => block.type === 'text')
-    const parsed = textBlock ? (JSON.parse(textBlock.text) as { terms?: unknown }) : { terms: [] }
+    const parsed = textBlock ? (JSON.parse(extractJson(textBlock.text)) as { terms?: unknown }) : { terms: [] }
     const terms = Array.isArray(parsed.terms)
       ? parsed.terms.filter((t): t is string => typeof t === 'string').slice(0, 5)
       : []

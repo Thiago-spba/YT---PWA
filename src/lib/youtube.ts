@@ -151,6 +151,7 @@ export async function getVideoById(id: string): Promise<Video | null> {
     thumbnailUrl: resolveThumbnail(item.id, item.snippet.thumbnails),
     isShort: seconds !== null ? seconds > 0 && seconds <= SHORT_MAX_SECONDS : undefined,
     durationSeconds: seconds ?? undefined,
+    categoryId: item.snippet.categoryId,
   }
 }
 
@@ -179,6 +180,7 @@ export async function getVideosByIds(ids: string[]): Promise<Video[]> {
           thumbnailUrl: resolveThumbnail(item.id, item.snippet.thumbnails),
           isShort: seconds !== null ? seconds > 0 && seconds <= SHORT_MAX_SECONDS : undefined,
           durationSeconds: seconds ?? undefined,
+          categoryId: item.snippet.categoryId,
         })
       }
     } catch {
@@ -216,7 +218,7 @@ export async function searchShortsPage(query: string, pageToken?: string): Promi
   const flags = await getVideoFlags(candidates.map((v) => v.id))
   const videos = candidates
     .filter((v) => flags[v.id]?.isShort && flags[v.id]?.embeddable)
-    .map((v) => ({ ...v, isShort: true, durationSeconds: flags[v.id]?.durationSeconds }))
+    .map((v) => ({ ...v, isShort: true, durationSeconds: flags[v.id]?.durationSeconds, categoryId: flags[v.id]?.categoryId }))
   return { videos, nextPageToken: data.nextPageToken }
 }
 
@@ -228,6 +230,7 @@ export interface VideoFlags {
   isShort: boolean
   embeddable: boolean
   durationSeconds: number
+  categoryId?: string
 }
 
 /** Busca duração e permissão de incorporação de até 50 vídeos de uma vez. */
@@ -237,13 +240,14 @@ export async function getVideoFlags(ids: string[]): Promise<Record<string, Video
   for (let i = 0; i < ids.length; i += 50) {
     const batch = ids.slice(i, i + 50)
     try {
-      const data = await fetchYoutube('videos', { id: batch.join(','), part: 'contentDetails,status' })
+      const data = await fetchYoutube('videos', { id: batch.join(','), part: 'snippet,contentDetails,status' })
       for (const item of data.items ?? []) {
         const seconds = parseIsoDuration(item.contentDetails.duration)
         flags[item.id] = {
           isShort: seconds > 0 && seconds <= SHORT_MAX_SECONDS,
           embeddable: item.status?.embeddable !== false,
           durationSeconds: seconds,
+          categoryId: item.snippet?.categoryId,
         }
       }
     } catch {
@@ -251,6 +255,23 @@ export async function getVideoFlags(ids: string[]): Promise<Record<string, Video
     }
   }
   return flags
+}
+
+/**
+ * Categoria oficial de um único vídeo (snippet.categoryId), para quando o
+ * Video em mão ainda não veio com ela (ex.: resultado de busca por texto,
+ * que usa o endpoint `search` e não traz categoryId). Usada só no momento
+ * de registrar interesse (baixo volume), nunca para listas inteiras — e
+ * cacheada 24h como qualquer outra chamada via fetchYoutube, então abrir o
+ * mesmo vídeo de novo não gasta cota outra vez. Nunca lança erro.
+ */
+export async function getVideoCategoryId(id: string): Promise<string | undefined> {
+  try {
+    const data = await fetchYoutube('videos', { id, part: 'snippet' })
+    return data.items?.[0]?.snippet?.categoryId
+  } catch {
+    return undefined
+  }
 }
 
 /**
