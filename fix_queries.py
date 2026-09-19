@@ -1,4 +1,6 @@
+﻿content = open('src/lib/discoveryQueries.ts', encoding='utf-8').read()
 
+new_queries = """
 export const DISCOVERY_QUERIES = [
   'aula educativa vestibular ENEM',
   'curso online gratuito portugues',
@@ -72,3 +74,8 @@ export function buildPersonalizedQueries(topCategories: string[]): string[] {
     .filter((q): q is string => Boolean(q))
   return mapped.length > 0 ? mapped : DISCOVERY_QUERIES
 }
+"""
+
+with open('src/lib/discoveryQueries.ts', 'w', encoding='utf-8') as f:
+    f.write(new_queries.lstrip("\\n"))
+print('discoveryQueries.ts atualizado com 30 categorias!')

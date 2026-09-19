@@ -8,6 +8,7 @@ import { getSuggestions } from '../lib/searchSuggest'
 import { extractVideoId, getVideoById, getVideosByIds, hasApiKey, searchVideosPage, YoutubeApiError } from '../lib/youtube'
 import { QUOTA_EXCEEDED_MESSAGE } from '../lib/youtubeCache'
 import { RECOMMENDED_VIDEO_IDS } from '../config/recommendedVideos'
+import CategoryBar from './CategoryBar'
 import { buildPersonalizedQueries } from '../lib/discoveryQueries'
 
 interface Props {
@@ -407,6 +408,7 @@ export default function Home({ onSelect }: Props) {
 
   return (
     <div className="mx-auto max-w-[1800px] p-4">
+      <CategoryBar onSelect={(query) => { setInput(query); runSearch(query) }} />
       <div ref={boxRef} className="relative mx-auto mb-6 max-w-2xl">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
