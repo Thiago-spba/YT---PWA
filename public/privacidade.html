@@ -3,17 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Política de Privacidade — YT</title>
+  <title>Política de Privacidade – TF Edu</title>
   <style>
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      max-width: 700px;
-      margin: 0 auto;
-      padding: 2rem 1.25rem 4rem;
-      line-height: 1.6;
-      color: #1a1a1a;
-      background: #fff;
-    }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 700px; margin: 0 auto; padding: 2rem 1.25rem 4rem; line-height: 1.6; color: #1a1a1a; background: #fff; }
     h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
     h2 { font-size: 1.1rem; margin-top: 2rem; }
     p, li { font-size: 0.95rem; }
@@ -22,61 +14,73 @@
   </style>
 </head>
 <body>
-  <h1>Política de Privacidade — YT</h1>
-  <p class="meta">Última atualização: 12 de setembro de 2026</p>
+  <h1>🥇 TF Edu – Política de Privacidade</h1>
+  <p class="meta">Última atualização: 19 de setembro de 2026</p>
 
   <p>
-    O YT (aplicativo disponível em
-    <a href="https://yt-pwa-nine.vercel.app">yt-pwa-nine.vercel.app</a>) é um
-    aplicativo pessoal, desenvolvido e usado por uma única pessoa, para
-    organizar e assistir vídeos do YouTube sem propaganda. Ele não é
-    distribuído publicamente nem oferecido como serviço para terceiros.
+    O TF Edu (disponível em <a href="https://tfedu.vercel.app">tfedu.vercel.app</a>)
+    é uma plataforma pessoal de aprendizado que utiliza a YouTube Data API v3
+    para exibir conteúdo educacional como cursos, vestibular, concursos e tecnologia.
+    Este aplicativo utiliza os YouTube API Services do Google.
+  </p>
+
+  <h2>Uso da YouTube API Services</h2>
+  <p>
+    Este app utiliza os YouTube API Services para buscar e reproduzir vídeos.
+    Ao usar o TF Edu, você também está sujeito à
+    <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">
+      Política de Privacidade do Google</a>.
+    Você pode revogar o acesso do app à sua conta Google a qualquer momento em
+    <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">
+      myaccount.google.com/permissions</a>.
   </p>
 
   <h2>Quais dados o app acessa</h2>
-  <p>
-    Quando você conecta sua conta do Google, o app solicita acesso
-    <strong>somente leitura</strong> aos seguintes dados, através da API do
-    YouTube:
-  </p>
+  <p>Quando você conecta sua conta do Google, o app acessa:</p>
   <ul>
-    <li>Lista de inscrições (canais que você segue)</li>
-    <li>Lista de playlists e os vídeos dentro delas</li>
+    <li>Dados públicos de vídeos do YouTube (título, miniatura, canal, duração)</li>
+    <li>Lista de inscrições e playlists (somente leitura)</li>
     <li>Nome, e-mail e foto de perfil públicos da conta Google</li>
   </ul>
   <p>
-    O app não publica, exclui, modifica nem envia nada em nome da sua conta
-    do Google — o acesso é usado apenas para importar vídeos de suas
-    inscrições/playlists para o catálogo pessoal dentro do app.
+    O app não publica, exclui, modifica nem envia nada em nome da sua conta Google.
+    O acesso é usado apenas para exibir conteúdo educacional personalizado.
   </p>
 
-  <h2>Como os dados são guardados</h2>
+  <h2>Como os dados são armazenados</h2>
   <p>
-    O token de acesso à sua conta Google fica guardado apenas no servidor,
-    em um cookie seguro (HttpOnly), e nunca é enviado a terceiros ou
-    armazenado em qualquer outro serviço. Os vídeos importados ficam salvos
-    localmente no seu próprio navegador/dispositivo (IndexedDB), não em um
-    banco de dados compartilhado.
+    Favoritos, histórico de vídeos assistidos, playlists e preferências ficam
+    salvos <strong>apenas localmente</strong> no seu navegador (localStorage/IndexedDB).
+    Nenhum dado pessoal é enviado a servidores externos ou compartilhado com terceiros.
+  </p>
+
+  <h2>Cookies e tecnologias similares</h2>
+  <p>
+    O app usa <strong>localStorage</strong> e <strong>IndexedDB</strong> para armazenar
+    preferências e histórico localmente no seu dispositivo. A reprodução de vídeos
+    usa o modo de privacidade avançada do YouTube (<code>youtube-nocookie.com</code>),
+    que reduz cookies de rastreamento até que o vídeo seja iniciado.
   </p>
 
   <h2>Compartilhamento de dados</h2>
   <p>
-    Nenhum dado obtido da sua conta Google é vendido, compartilhado ou
-    usado para qualquer finalidade além do funcionamento deste app pessoal.
+    Nenhum dado pessoal é vendido, alugado ou compartilhado com terceiros.
+    Os dados de vídeo exibidos são obtidos diretamente da YouTube Data API v3
+    e pertencem ao YouTube/Google.
   </p>
 
   <h2>Como revogar o acesso</h2>
   <p>
-    Você pode desconectar a qualquer momento pelo próprio app (painel de
-    Configurações → Desconectar) ou diretamente pela sua conta Google, em
+    Você pode desconectar a qualquer momento pelo próprio app ou diretamente
+    pela sua conta Google em
     <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">
       myaccount.google.com/permissions</a>.
   </p>
 
   <h2>Contato</h2>
   <p>
-    Dúvidas sobre esta política podem ser enviadas para
-    <a href="mailto:thiago.rpba@gmail.com">thiago.rpba@gmail.com</a>.
+    Dúvidas sobre privacidade podem ser enviadas para
+    <a href="mailto:thiagorpba@gmail.com">thiagorpba@gmail.com</a>.
   </p>
 </body>
 </html>

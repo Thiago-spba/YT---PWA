@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿content = """import { useState } from 'react'
 
 type Panel = 'privacy' | 'terms' | null
 
@@ -14,11 +14,11 @@ export default function Footer() {
     <footer className="mt-8 border-t border-neutral-200 p-4 text-sm text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
       <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-2">
         <span>
-          <strong className="text-neutral-700 dark:text-neutral-200">🥇 TF Edu</strong>{" "}
-          – {year}
+          <strong className="text-neutral-700 dark:text-neutral-200">\U0001F947 TF Edu</strong>{" "}
+          \u2013 {year}
         </span>
         <span className="text-neutral-500 dark:text-neutral-400">
-          Thiago Fernando – Engenheiro da Computação e Desenvolvedor
+          Thiago Fernando \u2013 Engenheiro da Computa\u00e7\u00e3o e Desenvolvedor
         </span>
         <div className="flex gap-2">
           <button type="button" onClick={() => toggle("privacy")}
@@ -39,41 +39,41 @@ export default function Footer() {
       {open === "privacy" && (
         <div className="mx-auto mt-3 max-w-[1800px] space-y-2 rounded-lg bg-neutral-100 p-4 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
           <h3 className="font-semibold text-neutral-800 dark:text-neutral-100">
-            Política de Privacidade
+            Pol\u00edtica de Privacidade
           </h3>
           <p>
             <strong>Uso da YouTube API Services:</strong> Este aplicativo utiliza os
-            YouTube API Services do Google para buscar e exibir vídeos. Ao usar
-            este app, você também está sujeito à{" "}
+            YouTube API Services do Google para buscar e exibir v\u00eddeos. Ao usar
+            este app, voc\u00ea tamb\u00e9m est\u00e1 sujeito \u00e0{" "}
             <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" className="underline">
-              Política de Privacidade do Google
+              Pol\u00edtica de Privacidade do Google
             </a>.
           </p>
           <p>
             <strong>Dados acessados via YouTube API:</strong> O app acessa dados
-            públicos do YouTube como títulos, miniaturas, canais e contagens de
-            visualizações. Não acessamos dados privados da sua conta do
-            YouTube sem sua autorização explícita.
+            p\u00fablicos do YouTube como t\u00edtulos, miniaturas, canais e contagens de
+            visualiza\u00e7\u00f5es. N\u00e3o acessamos dados privados da sua conta do
+            YouTube sem sua autoriza\u00e7\u00e3o expl\u00edcita.
           </p>
           <p>
             <strong>Dados armazenados no seu dispositivo:</strong> Favoritos,
-            histórico de vídeos assistidos, playlists e preferências ficam
+            hist\u00f3rico de v\u00eddeos assistidos, playlists e prefer\u00eancias ficam
             salvos apenas localmente no seu navegador (localStorage/IndexedDB).
-            Nenhum dado pessoal é enviado a servidores externos.
+            Nenhum dado pessoal \u00e9 enviado a servidores externos.
           </p>
           <p>
             <strong>Cookies e tecnologias similares:</strong> O app usa localStorage
-            e IndexedDB para armazenar preferências localmente. A reprodução
-            usa o modo privacidade avançada do YouTube (youtube-nocookie.com),
+            e IndexedDB para armazenar prefer\u00eancias localmente. A reprodu\u00e7\u00e3o
+            usa o modo privacidade avan\u00e7ada do YouTube (youtube-nocookie.com),
             que reduz cookies de rastreamento.
           </p>
           <p>
-            <strong>Compartilhamento de dados:</strong> Não vendemos nem
-            compartilhamos seus dados. Os dados de vídeo vêm da YouTube Data API v3
+            <strong>Compartilhamento de dados:</strong> N\u00e3o vendemos nem
+            compartilhamos seus dados. Os dados de v\u00eddeo v\u00eam da YouTube Data API v3
             e pertencem ao YouTube/Google.
           </p>
           <p>
-            <strong>Contato:</strong> Dúvidas sobre privacidade:{" "}
+            <strong>Contato:</strong> D\u00favidas sobre privacidade:{" "}
             <a href="mailto:thiagorpba@gmail.com" className="underline">
               thiagorpba@gmail.com
             </a>
@@ -87,25 +87,29 @@ export default function Footer() {
             Termos de uso
           </h3>
           <p>
-            TF Edu é uma plataforma pessoal de aprendizado que utiliza a
-            YouTube Data API v3 para exibir conteúdo educacional.
-            Não é afiliado ao YouTube ou ao Google.
+            TF Edu \u00e9 uma plataforma pessoal de aprendizado que utiliza a
+            YouTube Data API v3 para exibir conte\u00fado educacional.
+            N\u00e3o \u00e9 afiliado ao YouTube ou ao Google.
           </p>
           <p>
-            Todo o conteúdo de vídeo pertence aos respectivos criadores e ao
+            Todo o conte\u00fado de v\u00eddeo pertence aos respectivos criadores e ao
             YouTube/Google, sujeito aos{" "}
             <a href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer" className="underline">
-              Termos de Serviço do YouTube
+              Termos de Servi\u00e7o do YouTube
             </a>
-            . Este app apenas organiza e exibe esse conteúdo através do
-            player e da API oficiais – não hospeda, baixa nem redistribui vídeos.
+            . Este app apenas organiza e exibe esse conte\u00fado atrav\u00e9s do
+            player e da API oficiais \u2013 n\u00e3o hospeda, baixa nem redistribui v\u00eddeos.
           </p>
           <p>
-            É necessária conexão com a internet. O uso por crianças
-            deve ser supervisionado por um responsável.
+            \u00c9 necess\u00e1ria conex\u00e3o com a internet. O uso por crian\u00e7as
+            deve ser supervisionado por um respons\u00e1vel.
           </p>
         </div>
       )}
     </footer>
   )
 }
+"""
+with open("src/components/Footer.tsx", "w", encoding="utf-8") as f:
+    f.write(content.lstrip("\n"))
+print("Footer.tsx reescrito com sucesso!")

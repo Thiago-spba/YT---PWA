@@ -17,9 +17,9 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ['icons/apple-touch-icon.png'],
       manifest: {
-        name: 'YT',
-        short_name: 'YT',
-        description: 'Catálogo de vídeos do YouTube para assistir sem propaganda, com o Brave.',
+        name: 'TF Edu 🥇',
+        short_name: 'TF Edu',
+        description: 'Sua plataforma pessoal de aprendizado: cursos, vestibular, concursos e tecnologia.',
         theme_color: '#4c1d95',
         background_color: '#16171d',
         display: 'standalone',

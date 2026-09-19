@@ -1,4 +1,4 @@
-<!doctype html>
+﻿html = '''<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -22,4 +22,8 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
-</html>
+</html>'''
+
+with open('index.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+print('index.html reescrito corretamente!')
