@@ -1,5 +1,3 @@
-import React from 'react'
-
 interface Category {
   key: string
   label: string
