@@ -30,6 +30,14 @@ function isRateLimited(ip: string): boolean {
   return recent.length > RATE_LIMIT_MAX_REQUESTS
 }
 
+
+const ALLOWED_ORIGINS = [
+  'https://yt-pwa-nine.vercel.app',
+  'https://tfedu.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:4173',
+]
+
 const BASE_URL = 'https://www.googleapis.com/youtube/v3'
 const MAX_QUERY_LENGTH = 200
 
@@ -58,6 +66,18 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     'unknown'
   if (isRateLimited(ip)) {
     res.status(429).json({ error: 'Muitas buscas em pouco tempo. Aguarde um instante.' })
+    return
+  }
+
+
+  const origin = paramString(req.headers['origin']) ?? ''
+  const referer = paramString(req.headers['referer']) ?? ''
+  const isAllowed =
+    ALLOWED_ORIGINS.some((o) => origin === o || referer.startsWith(o)) ||
+    origin === '' // chamada server-side sem origin
+
+  if (!isAllowed) {
+    res.status(403).json({ error: 'Acesso n\u00e3o autorizado.' })
     return
   }
 

@@ -20,6 +20,13 @@ interface ApiResponse {
 // (site estático + functions), um mapa em memória já reduz abuso o
 // suficiente para o volume de uso familiar deste app. Reseta a cada cold
 // start da function, o que é uma limitação aceitável aqui.
+const ALLOWED_ORIGINS = [
+  'https://yt-pwa-nine.vercel.app',
+  'https://tfedu.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:4173',
+]
+
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 20
 const requestLog = new Map<string, number[]>()
@@ -67,6 +74,20 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     res.status(405).json({ error: 'Método não permitido.' })
     return
   }
+
+  const rawOrigin = req.headers['origin']
+  const rawReferer = req.headers['referer']
+  const origin = (Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin) ?? ''
+  const referer = (Array.isArray(rawReferer) ? rawReferer[0] : rawReferer) ?? ''
+  const isAllowed =
+    ALLOWED_ORIGINS.some((o) => origin === o || referer.startsWith(o)) ||
+    origin === ''
+
+  if (!isAllowed) {
+    res.status(403).json({ error: 'Acesso não autorizado.' })
+    return
+  }
+
 
   const forwardedFor = req.headers['x-forwarded-for']
   const ip = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor)?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown'
