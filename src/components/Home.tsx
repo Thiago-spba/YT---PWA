@@ -140,9 +140,8 @@ export default function Home({ onSelect }: Props) {
           return
         }
 
-        fetchInitial().then((videos) => {
-          if (videos) setApiVideos(videos)
-        })
+        // Busca automatica desativada para preservar cota
+        // O usuario pode clicar em uma categoria ou buscar manualmente
       })
   }, [])
 
