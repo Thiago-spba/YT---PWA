@@ -43,7 +43,19 @@ export function writeYoutubeCache(key: string, data: unknown): void {
 /** true assim que o proxy responder 429/403 uma vez nesta sessão de aba. */
 export function isQuotaExceeded(): boolean {
   try {
-    return sessionStorage.getItem(QUOTA_FLAG_KEY) === 'true'
+    try {
+    const raw = localStorage.getItem(QUOTA_FLAG_KEY)
+    if (!raw) return false
+    const { exceededAt } = JSON.parse(raw)
+    // Reseta automaticamente apos 24h (quando a cota do Google renova)
+    if (Date.now() - exceededAt > 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(QUOTA_FLAG_KEY)
+      return false
+    }
+    return true
+  } catch {
+    return false
+  }
   } catch {
     return false
   }
@@ -51,7 +63,7 @@ export function isQuotaExceeded(): boolean {
 
 export function markQuotaExceeded(): void {
   try {
-    sessionStorage.setItem(QUOTA_FLAG_KEY, 'true')
+    localStorage.setItem(QUOTA_FLAG_KEY, JSON.stringify({ exceededAt: Date.now() }))
   } catch {
     // ignore
   }
