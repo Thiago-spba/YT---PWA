@@ -33,7 +33,6 @@ function isRateLimited(ip: string): boolean {
 
 const ALLOWED_ORIGINS = [
   'https://tfedu.vercel.app',
-  'https://tfedu.vercel.app',
   'http://localhost:5173',
   'http://localhost:4173',
 ]
