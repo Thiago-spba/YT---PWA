@@ -347,7 +347,7 @@ export default function Home({ onSelect }: Props) {
         setSearchQuery(combinedQuery)
       } else {
         setSearchStatus(
-          'Isso não parece um link do YouTube. Para buscar por texto, a busca precisa estar configurada.',
+          'Cole um link de vídeo ou configure a busca para pesquisar por texto.',
         )
       }
     } catch (err) {
@@ -423,7 +423,7 @@ export default function Home({ onSelect }: Props) {
                 })
             }}
             placeholder={
-              hasApiKey() ? 'Buscar ou colar link de vídeo do YouTube' : 'Colar link de vídeo do YouTube'
+              hasApiKey() ? 'Buscar conteúdo educacional' : 'Colar link de vídeo'
             }
             autoComplete="off"
             className="flex-1 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-900 placeholder-neutral-500 shadow-sm focus:border-violet-500 focus:outline-none dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100 dark:placeholder-neutral-400"
@@ -508,7 +508,7 @@ export default function Home({ onSelect }: Props) {
       )}
 
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">{searchResults ? 'Mais vídeos' : 'Início'}</h2>
+        <h2 className="text-lg font-semibold">{searchResults ? 'Mais vídeos' : 'Aprender'}</h2>
         {hasApiKey() && (
           <button
             type="button"
