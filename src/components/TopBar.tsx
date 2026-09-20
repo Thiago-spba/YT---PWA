@@ -60,12 +60,12 @@ function ShortsIcon() {
 }
 
 const items: { key: View; label: string; icon: () => React.JSX.Element }[] = [
-  { key: 'home', label: 'Início', icon: HomeIcon },
-  { key: 'catalog', label: 'Meus Canais', icon: CatalogIcon },
-  { key: 'shorts', label: 'Shorts', icon: ShortsIcon },
+  { key: 'home', label: 'Aprender', icon: HomeIcon },
+  { key: 'catalog', label: 'Meus Cursos', icon: CatalogIcon },
+  { key: 'shorts', label: 'Dicas Rápidas', icon: ShortsIcon },
   { key: 'favorites', label: 'Favoritos', icon: FavoritesIcon },
   { key: 'playlist', label: 'Playlist', icon: PlaylistIcon },
-  { key: 'history', label: 'Histórico', icon: HistoryIcon },
+  { key: 'history', label: 'Assistidos', icon: HistoryIcon },
 ]
 
 export default function TopBar({ view, onChange }: Props) {

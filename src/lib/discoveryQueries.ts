@@ -92,13 +92,7 @@ export const CATEGORY_QUERIES: Record<string, string> = {
   documentarios: 'documentario nacional historia ciencia',
   planeta: 'planeta terra geologia vulcoes curiosidades',
   genetica: 'genetica DNA evolucao humana explicacao',
-  religioso: 'louvor gospel musica crista',
-  musica: 'musica clipe show ao vivo',
-  noticias: 'noticias Brasil hoje',
-  entretenimento: 'videos de comedia e humor',
   educativo: 'aula tutorial como fazer',
-  infantil: 'desenho animado infantil',
-  esportes: 'melhores momentos futebol',
 }
 
 function shuffle<T>(arr: T[]): T[] {
