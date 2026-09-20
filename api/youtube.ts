@@ -32,7 +32,7 @@ function isRateLimited(ip: string): boolean {
 
 
 const ALLOWED_ORIGINS = [
-  'https://yt-pwa-nine.vercel.app',
+  'https://tfedu.vercel.app',
   'https://tfedu.vercel.app',
   'http://localhost:5173',
   'http://localhost:4173',

@@ -21,7 +21,7 @@ interface ApiResponse {
 // suficiente para o volume de uso familiar deste app. Reseta a cada cold
 // start da function, o que é uma limitação aceitável aqui.
 const ALLOWED_ORIGINS = [
-  'https://yt-pwa-nine.vercel.app',
+  'https://tfedu.vercel.app',
   'https://tfedu.vercel.app',
   'http://localhost:5173',
   'http://localhost:4173',
