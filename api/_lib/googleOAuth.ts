@@ -12,7 +12,7 @@
 // ~1h) direto com o Google, na hora — por isso a conexão sobrevive a
 // reload, atualização do PWA, etc.
 
-export const APP_ORIGIN = 'https://yt-pwa-nine.vercel.app'
+export const APP_ORIGIN = 'https://tfedu.vercel.app'
 
 export const OAUTH_SCOPE =
   'https://www.googleapis.com/auth/youtube.readonly openid email profile'
