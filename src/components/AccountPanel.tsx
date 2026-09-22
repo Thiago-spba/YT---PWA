@@ -30,6 +30,7 @@ import {
   verifyPin,
 } from '../lib/storage'
 import { isWakeLockSupported } from '../lib/useWakeLock'
+import TVLogin from './TVLogin'
 
 interface Props {
   onCatalogChanged: () => void
@@ -567,6 +568,13 @@ export default function AccountPanel({ onCatalogChanged }: Props) {
                       />
                     </button>
                   </div>
+                </section>
+
+                <section className="border-t border-neutral-200 pt-4 dark:border-neutral-700">
+                  <h2 className="mb-3 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+                    📺 Login para TV
+                  </h2>
+                  <TVLogin onSuccess={() => window.location.reload()} />
                 </section>
 
                 <section className="border-t border-neutral-200 pt-4 dark:border-neutral-700">
