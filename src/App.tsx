@@ -12,6 +12,7 @@ import {
   setLastView,
 } from './lib/storage'
 import { applyPendingUpdate } from './lib/pwaUpdate'
+import { AuthProvider } from './lib/useAuth'
 import type { Video } from './types'
 import TopBar from './components/TopBar'
 import Home from './components/Home'
@@ -129,6 +130,7 @@ function App() {
   }
 
   return (
+    <AuthProvider>
     <div className="min-h-svh bg-neutral-50 dark:bg-neutral-950">
       <TopBar view={view} onChange={handleChangeView} />
       {updateAvailable && (
@@ -180,6 +182,7 @@ function App() {
         </Suspense>
       )}
     </div>
+    </AuthProvider>
   )
 }
 
